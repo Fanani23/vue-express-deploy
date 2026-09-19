@@ -13,7 +13,7 @@
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   min-height: 100vh;
-  min-height: 100dvh; /* mobile browsers: exclude the collapsing address bar */
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: 1fr 1fr;
   position: relative;
@@ -39,7 +39,7 @@
   flex-direction: column;
   justify-content: center;
   gap: 1rem;
-  padding: 4rem clamp(3.5rem, 8vw, 9rem); /* breathes on wide screens */
+  padding: 4rem clamp(3.5rem, 8vw, 9rem);
   color: #fff;
   background:
     radial-gradient(1200px 600px at -10% -10%, rgb(255 255 255 / 0.18), transparent 60%),
@@ -51,9 +51,6 @@
 }
 .auth__brand * { color: #fff; }
 
-/* Soft edge: an S-curve in the page colour laid over the brand panel's inner edge, so the two halves
-   meet with a gentle sweep instead of a hard line. It rides along when the panels swap and is mirrored
-   onto the other edge. */
 .brand__edge {
   position: absolute; top: 0; bottom: 0; right: -1px;
   width: clamp(3rem, 6vw, 6rem); height: 100%;
@@ -62,7 +59,7 @@
   transition: fill 0.2s ease;
 }
 .auth--signup .brand__edge { right: auto; left: -1px; transform: scaleX(-1); }
-.brand__edge--bottom { display: none; } /* the stacked layouts use this one instead */
+.brand__edge--bottom { display: none; }
 .brand__copy { display: grid; gap: 1rem; }
 .brand__logo {
   width: 3.25rem; height: 3.25rem; border-radius: 12px;
@@ -167,8 +164,6 @@
 .pop-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translateY(8px) scale(0.98); }
 
-/* Phones and portrait tablets: stacked. The panels stay put (only the copy and the form animate) and
-   the soft edge moves to the bottom of the brand block. */
 @media (max-width: 860px) {
   .auth { grid-template-columns: 1fr; }
   .auth__brand { padding: 2.5rem 1.5rem 3rem; }
@@ -181,15 +176,12 @@
     width: 100%; height: 2.25rem; transform: none;
   }
 }
-/* Small phones: tighter card and type so nothing wraps awkwardly at 320–400px. */
 @media (max-width: 400px) {
   .auth__form { padding: 1.75rem 1.25rem; }
   .auth__title { font-size: 1.4rem; }
   .brand__title { font-size: 1.7rem; }
   .brand__cta { padding: 0.5rem 0.9rem; font-size: 0.9rem; }
 }
-/* Phones held sideways (wide but very short): side by side again with a compact brand column, so the
-   form is above the fold instead of under a full-height header. */
 @media (max-width: 860px) and (min-width: 600px) and (max-height: 520px) {
   .auth { grid-template-columns: 1fr 1fr; }
   .auth__brand { padding: 1.5rem; }
@@ -197,7 +189,7 @@
   .brand__title { font-size: 1.5rem; }
   .brand__tagline { font-size: 0.95rem; }
   .brand__cta { margin-top: 0.5rem; padding: 0.45rem 0.9rem; font-size: 0.9rem; }
-  .auth__panel { padding: 3.25rem 1rem 1rem; } /* clears the fixed theme toggle */
+  .auth__panel { padding: 3.25rem 1rem 1rem; }
   .auth__form { padding: 1.5rem 1.25rem; }
   .auth--signup .auth__brand { transform: translateX(100%); }
   .auth--signup .auth__panel { transform: translateX(-100%); }
