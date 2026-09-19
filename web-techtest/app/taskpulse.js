@@ -139,6 +139,7 @@ export const useTaskPulseSocket = ({ onMessage } = {}) => {
     events,
     isOpen: computed(() => state.value === 'open'),
     broadcast: (text) => send('broadcast', text),
+    echo: (text) => send('echo', text),
     ping: () => send('ping'),
     reconnect: () => { close(); connect() },
     url: WS,

@@ -11,13 +11,22 @@
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :lg="10">
         <div class="page__card profile">
-          <span class="profile__avatar">{{ initials }}</span>
+          <span class="profile__avatar"><img v-if="gravatar" :src="gravatar" alt="" @error="gravatar = ''" /><template v-else>{{ initials }}</template></span>
           <h2 class="profile__name">{{ identity }}</h2>
           <p class="profile__sub">user id {{ user.sub ?? '—' }}</p>
           <div class="profile__roles">
             <a-tag v-for="r in roles" :key="r" color="blue">{{ r }}</a-tag>
             <span v-if="!roles.length" class="page__muted">no roles on this token</span>
           </div>
+          <p class="page__note">Avatar from Gravatar when the address has one; otherwise your initials.</p>
+        </div>
+        <div class="page__card page__section">
+          <h3 class="page__h3">Ways to sign in</h3>
+          <dl class="kv">
+            <dt>Password + code</dt><dd>scrypt-hashed password, then a 6-digit code</dd>
+            <dt>Google</dt><dd>{{ providers.google ? 'available — same account when the verified email matches' : 'not configured on this server' }}</dd>
+            <dt>Seeded demo account</dt><dd>{{ isSeeded ? 'yes — default code 111111' : 'no — codes arrive by email' }}</dd>
+          </dl>
         </div>
       </a-col>
       <a-col :xs="24" :lg="14">
@@ -56,6 +65,22 @@ const identity = computed(() => user.value.user_meta?.email || user.value.email 
 const initials = computed(() => identity.value.replace(/@.*/, '').slice(0, 2).toUpperCase())
 const claims = computed(() => JSON.stringify(user.value, null, 2))
 const providers = ref({})
+const gravatar = ref('')
+const isSeeded = computed(() => /^(test|ais-one|aaronjxz|admin@techtest.dev|demo@techtest.dev|viewer@techtest.dev)$/.test(identity.value))
+
+const loadGravatar = async () => {
+  const email = user.value.user_meta?.email
+  if (!email || !email.includes('@') || !crypto?.subtle) return
+  const bytes = new TextEncoder().encode(email.trim().toLowerCase())
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('')
+  const url = `https://www.gravatar.com/avatar/${hash}?s=160&d=404`
+  try {
+    const res = await fetch(url, { method: 'HEAD', mode: 'cors' })
+    if (res.ok) gravatar.value = url
+  } catch {
+    gravatar.value = ''
+  }
+}
 const now = ref(Date.now())
 let tick
 
@@ -69,6 +94,7 @@ const remaining = computed(() => {
 
 onMounted(async () => {
   tick = setInterval(() => { now.value = Date.now() }, 1000)
+  loadGravatar()
   try { providers.value = (await http.get('/api/auth/providers')).data } catch { providers.value = {} }
 })
 onBeforeUnmount(() => clearInterval(tick))
