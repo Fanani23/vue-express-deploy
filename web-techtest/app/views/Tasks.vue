@@ -57,11 +57,10 @@
             :data-source="tasks"
             :columns="columns"
             :loading="loading"
-            :pagination="{ current: page, pageSize, total, showSizeChanger: false, size: 'small', showTotal: (t) => `${t} task${t === 1 ? '' : 's'}` }"
+            :pagination="false"
             row-key="id"
             size="middle"
             class="tasks"
-            @change="onTableChange"
           >
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'title'">
@@ -94,10 +93,15 @@
               <div class="empty"><InboxOutlined class="empty__icon" /><span>{{ filter === 'all' ? 'No tasks yet' : `Nothing ${STATUS_LABEL[filter].toLowerCase()}` }}</span><span class="empty__hint">{{ filter === 'all' ? 'Add the first one above.' : 'Pick another filter or add a task.' }}</span></div>
             </template>
           </a-table>
-
-          <p class="page__note">
-            <code>{{ api }}</code> · problem+json on errors · optimistic concurrency (xmin) · every change is announced to the other open tabs over the socket.
-          </p>
+          <div v-if="total > 0" class="pager">
+            <span class="pager__info">Showing <strong>{{ rangeStart }}–{{ rangeEnd }}</strong> of <strong>{{ total }}</strong></span>
+            <div class="pager__controls">
+              <a-select v-model:value="pageSize" size="small" class="pager__size" :options="[8, 16, 32].map((n) => ({ value: n, label: `${n} / page` }))" />
+              <a-button size="small" :disabled="page <= 1" @click="goTo(page - 1)"><template #icon><LeftOutlined /></template></a-button>
+              <button v-for="p in pageItems" :key="p.key" type="button" class="pager__page" :class="{ 'pager__page--on': p.n === page, 'pager__page--gap': p.gap }" :disabled="p.gap" @click="goTo(p.n)">{{ p.gap ? '…' : p.n }}</button>
+              <a-button size="small" :disabled="page >= pageCount" @click="goTo(page + 1)"><template #icon><RightOutlined /></template></a-button>
+            </div>
+          </div>
         </div>
       </a-col>
 
@@ -128,10 +132,6 @@
             </li>
             <li v-if="!ws.events.value.length" class="empty"><ThunderboltOutlined class="empty__icon" /><span>No messages yet</span><span class="empty__hint">Waiting for the first message from the socket.</span></li>
           </ul>
-
-          <p class="page__note">
-            <code>{{ ws.url }}</code> · open this page in a second tab and send something — or change a task there.
-          </p>
         </div>
       </a-col>
     </a-row>
@@ -143,8 +143,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
-import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 import { tasksApi, useTaskPulseSocket, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
 
 const api = tasksApi.urls.api
@@ -153,7 +153,7 @@ const counts = ref(null)
 const tasks = ref([])
 const total = ref(0)
 const page = ref(1)
-const pageSize = 8
+const pageSize = ref(8)
 const filter = ref('all')
 const loading = ref(false)
 const creating = ref(false)
@@ -191,7 +191,7 @@ const loadCounts = async () => {
 const loadTasks = async () => {
   loading.value = true
   try {
-    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, page: page.value, pageSize })
+    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, page: page.value, pageSize: pageSize.value })
     tasks.value = res.items
     total.value = res.total
     if (res.items.length === 0 && page.value > 1) { page.value = 1; await loadTasks() }
@@ -201,7 +201,22 @@ const loadTasks = async () => {
 const refresh = () => Promise.all([loadCounts(), loadTasks()])
 
 const setFilter = (key) => { filter.value = key }
-const onTableChange = (p) => { page.value = p.current; loadTasks() }
+const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const rangeStart = computed(() => (total.value ? (page.value - 1) * pageSize.value + 1 : 0))
+const rangeEnd = computed(() => Math.min(total.value, page.value * pageSize.value))
+const pageItems = computed(() => {
+  const n = pageCount.value, c = page.value, out = []
+  const push = (i) => out.push({ key: i, n: i })
+  if (n <= 7) { for (let i = 1; i <= n; i++) push(i); return out }
+  push(1)
+  if (c > 3) out.push({ key: 'g1', gap: true })
+  for (let i = Math.max(2, c - 1); i <= Math.min(n - 1, c + 1); i++) push(i)
+  if (c < n - 2) out.push({ key: 'g2', gap: true })
+  push(n)
+  return out
+})
+const goTo = (p) => { page.value = Math.min(Math.max(1, p), pageCount.value); loadTasks() }
+watch(pageSize, () => { page.value = 1; loadTasks() })
 
 const announce = (what, task) => ws.broadcast(`task:${what} "${task.title}"`)
 
