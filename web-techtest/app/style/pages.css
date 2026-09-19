@@ -17,8 +17,8 @@
 
 
 .shell__content h1, .shell__content h2, .shell__content h3 { letter-spacing: -0.01em; }
-.shell__content button:not(.ant-btn):not(.shell__trigger):not(.theme-toggle):not(.stat) { appearance: none; border: 1px solid var(--p-border); background: var(--p-card); color: var(--p-text); border-radius: 8px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.85rem; cursor: pointer; margin: 0.15rem 0.35rem 0.15rem 0; transition: border-color 0.15s, box-shadow 0.15s; }
-.shell__content button:not(.ant-btn):not(.shell__trigger):not(.theme-toggle):not(.stat):hover { border-color: var(--p-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-accent) 15%, transparent); }
+.shell__content button:not(.ant-btn):not(.shell__trigger):not(.theme-toggle):not(.stat):not(.swatch):not(.pager__page):not(.cam__btn) { appearance: none; border: 1px solid var(--p-border); background: var(--p-card); color: var(--p-text); border-radius: 8px; padding: 0.3rem 0.8rem; font: inherit; font-size: 0.85rem; cursor: pointer; margin: 0.15rem 0.35rem 0.15rem 0; transition: border-color 0.15s, box-shadow 0.15s; }
+.shell__content button:not(.ant-btn):not(.shell__trigger):not(.theme-toggle):not(.stat):not(.swatch):not(.pager__page):not(.cam__btn):hover { border-color: var(--p-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-accent) 15%, transparent); }
 .shell__content input:not(.ant-input):not([type="checkbox"]):not([type="radio"]):not([type="file"]) { border: 1px solid var(--p-border); background: var(--p-card); color: var(--p-text); border-radius: 8px; padding: 0.4rem 0.7rem; font: inherit; }
 .shell__content ul:not(.ant-menu):not(.ant-pagination):not(.feed):not(.ant-select-dropdown *) { padding-left: 1.25rem; }
 
