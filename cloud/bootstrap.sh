@@ -76,12 +76,19 @@ import { PGlite } from '@electric-sql/pglite';
 const db = new PGlite('./db-sample/dev.db');
 await db.exec(\`DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='api_role') THEN CREATE ROLE api_role; END IF; END \$\$\`);
 await db.close();"
+install -o "$VT_USER" -m 0644 "$ROOT"/vue-express-deploy/migrations/*.js db-sample/migrations/
 as_vt npx knex --knexfile db-sample/knexfile.js migrate:latest 2>&1 | grep -E "Batch|Already up to date|migrations" || true
 if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/pglite';const db=new PGlite('./db-sample/dev.db');const r=await db.query('select count(*)::int n from users');console.log(r.rows[0].n);await db.close();")" == "0" ]]; then
   for s in initial_users.js initial_rbac.js initial_testdata.js; do as_vt npx knex --knexfile db-sample/knexfile.js seed:run --specific=$s 2>&1 | grep -E "Ran|RBAC" || true; done
 else
   echo "  already seeded"
 fi
+as_vt node --input-type=module -e "
+import { PGlite } from '@electric-sql/pglite';
+const db = new PGlite('./db-sample/dev.db');
+const r = await db.query(\"UPDATE users SET otp_pin = '111111' WHERE email IN ('test','ais-one','aaronjxz') AND otp_pin IS NULL\");
+console.log('  seeded accounts with fixed code 111111: ' + r.affectedRows + ' updated');
+await db.close();"
 
 log "Vue+Express: apply the web-techtest overlay (custom app, per the template README)"
 as_vt bash "$ROOT/vue-express-deploy/web-techtest/apply.sh" "$VT_HOME/vue-antd-template" | sed 's/^/  /'
@@ -152,7 +159,7 @@ GOOGLE_CALLBACK=
 EOF
   chmod 0600 /etc/vt/api.env
 fi
-sed -i "s/^USE_OTP=.*/USE_OTP=${USE_OTP:-TEST} # EMAIL (code by mail), GA (authenticator app), TEST (111111)/" "$VT_HOME/express-template/apps/sample-api/.env"
+sed -i "s/^USE_OTP=.*/USE_OTP=${USE_OTP:-EMAIL} # EMAIL (code by mail), GA (authenticator app), TEST (111111)/" "$VT_HOME/express-template/apps/sample-api/.env"
 systemctl daemon-reload
 systemctl enable --now vt-db vt-api >/dev/null
 systemctl restart vt-db vt-api
@@ -216,6 +223,6 @@ fi
 printf '  %-22s %s\n' "postgres port" "$(pg_lsclusters -h | awk 'NR==1{print $3}')  (5432 stays with the template's PGlite)"
 
 log "Done"
-echo "  Vue+Express   http://$PUBLIC_IP/          login test / test, OTP 111111 (USE_OTP=TEST; export USE_OTP=EMAIL + SMTP_* in /etc/vt/api.env for real codes)"
+echo "  Vue+Express   http://$PUBLIC_IP/          seeded accounts test / ais-one / aaronjxz, password test, code 111111; sign-ups get their code by email (SMTP_* in /etc/vt/api.env)"
 echo "  TaskPulse     http://$PUBLIC_IP:8088/     REST: /api/tasks  health: /health/ready  WebSocket console: /"
 echo "  Remember to open ports 80 and 8088 in the cloud provider's firewall / security group."

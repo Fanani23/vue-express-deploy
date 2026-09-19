@@ -42,8 +42,8 @@
           <h1 class="auth__title">Welcome back</h1>
           <p class="auth__subtitle">Sign in to continue to your dashboard.</p>
 
-          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'" class="auth__required" :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
-            <a-input data-cy="username" v-model:value="email" size="large" :type="otpEmailMode ? 'email' : 'text'" autocomplete="username" placeholder="you@example.com" @blur="touched.email = true">
+          <a-form-item label="Username or email" class="auth__required" :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
+            <a-input data-cy="username" v-model:value="email" size="large" type="text" autocomplete="username" placeholder="username or you@example.com" @blur="touched.email = true">
               <template #prefix><UserOutlined class="auth__icon" /></template>
             </a-input>
           </a-form-item>
@@ -83,7 +83,8 @@
           </a-button>
           <h1 class="auth__title">Two-step verification</h1>
           <p class="auth__subtitle">
-            <template v-if="otpTestMode">Test mode is on — the code is 111111.</template>
+            <template v-if="otpFixed">This is a seeded demo account — enter its default code. Signing in as <strong>{{ email }}</strong>.</template>
+            <template v-else-if="otpTestMode">Test mode is on — the code is 111111.</template>
             <template v-else-if="otpEmailMode">We emailed a 6-digit code to <strong>{{ email }}</strong>. It expires in 5 minutes.</template>
             <template v-else>Open your authenticator app and enter the current 6-digit code. Signing in as <strong>{{ email }}</strong>.</template>
           </p>
@@ -110,7 +111,7 @@
             Verify and sign in
           </a-button>
 
-          <p class="auth__hint">{{ otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
+          <p class="auth__hint">{{ otpFixed ? "The code for this account never changes." : otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
         </a-form>
 
         <SignUpForm v-else key="signup" @signin="go('signin')" />
@@ -157,19 +158,14 @@ const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
 const mode = ref('login')
+const otpFixed = ref(false)
 const otp = ref('')
 const otpInput = ref(null)
 
 const touched = reactive({ email: false, password: false })
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const digitsOnly = (v) => String(v ?? '').replace(/\D/g, '').slice(0, 6)
 
-const emailError = computed(() => {
-  const v = email.value.trim()
-  if (!v) return otpEmailMode.value ? 'Email is required' : 'Username or email is required'
-  if (otpEmailMode.value && !EMAIL_RE.test(v)) return 'Enter a valid email address'
-  return ''
-})
+const emailError = computed(() => (email.value.trim() ? '' : 'Username or email is required'))
 const passwordError = computed(() => (password.value ? '' : 'Password is required'))
 const fieldError = computed(() => ({
   email: touched.email ? emailError.value : '',
@@ -186,6 +182,7 @@ const setToLogin = () => {
   otp.value = ''
   otpCount = 0
   touched.email = touched.password = false
+  otpFixed.value = false
 }
 
 watch(mode, (m) => {
@@ -238,6 +235,7 @@ const login = async () => {
     if (data.otp) {
       mode.value = 'otp'
       otpId = data.otp
+      otpFixed.value = data.fixed === true
       otpCount = 0
     } else {
       const decoded = parseJwt(data.access_token)
