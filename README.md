@@ -15,6 +15,7 @@ commits validated in the setup notes:
 | Path | What it does |
 |---|---|
 | `patches/` + `patches/apply.sh` | seven patches applied to a checkout of `express-template`, in order: `0001` keyv string keys (login broke on `keyv@5`), `0002` awaited OTP verify (**security fix** — any code was accepted), `0003` EMAIL one-time codes + secrets from the environment, `0005` sign-up (the template ships a TODO stub and a dead `/signup` link), `0007` `GET /api/auth/providers` (the UI shows only what the server can do), `0008` Google sign-in, `0009` per-account default code (`users.otp_pin`: seeded demo accounts sign in with `111111`, every other account gets its code by email). Idempotent, marker-based. |
+| `patches/seed-demo-accounts.mjs` | run by `bootstrap.sh` after the template seeds: creates `admin@` / `demo@` / `viewer@techtest.dev` (password `Techtest123!`) and gives them and the template's seed users the default code `111111`; idempotent |
 | `migrations/` | kit migration copied next to the template's before `migrate:latest`: adds `users.otp_pin` |
 | `web-techtest/` + `web-techtest/apply.sh` | the custom frontend app, created as a copy of the template's `web-sample` with `web-techtest/app/` laid over it — the customisation route the template README prescribes, so `web-sample` is never edited. Registers `npm run techtest` / `techtest:build` and the missing `/signup` route. |
 | `systemd/` | `vt-db` (PGlite server), `vt-api` (Express), `vt-fe` (Vite) units for running the stack as services on a dev box |
