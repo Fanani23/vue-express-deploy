@@ -42,13 +42,13 @@
           <h1 class="auth__title">Welcome back</h1>
           <p class="auth__subtitle">Sign in to continue to your dashboard.</p>
 
-          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'" required :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
+          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'" class="auth__required" :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
             <a-input data-cy="username" v-model:value="email" size="large" :type="otpEmailMode ? 'email' : 'text'" autocomplete="username" placeholder="you@example.com" @blur="touched.email = true">
               <template #prefix><UserOutlined class="auth__icon" /></template>
             </a-input>
           </a-form-item>
 
-          <a-form-item label="Password" required :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
+          <a-form-item label="Password" class="auth__required" :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
             <a-input-password data-cy="password" v-model:value="password" size="large" autocomplete="current-password" placeholder="••••••••" @blur="touched.password = true">
               <template #prefix><LockOutlined class="auth__icon" /></template>
             </a-input-password>

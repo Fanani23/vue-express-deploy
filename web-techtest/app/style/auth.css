@@ -130,7 +130,7 @@
 .auth .ant-form-item-explain { color: var(--muted); }
 .auth .ant-form-item-explain-error { color: #ef4444; font-size: 0.8rem; margin-top: 0.15rem; }
 .auth .ant-form-item-has-error .ant-input-affix-wrapper { border-color: #ef4444; }
-.auth .ant-form-item-required::before { color: #ef4444 !important; }
+.auth .auth__required .ant-form-item-label > label::before { content: "*"; color: #ef4444; margin-right: 4px; }
 .auth .ant-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
 .auth .ant-checkbox-wrapper { color: var(--text); }
 .auth .ant-divider-inner-text { color: var(--muted); }

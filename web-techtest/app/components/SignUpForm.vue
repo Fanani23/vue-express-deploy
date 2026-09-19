@@ -5,13 +5,13 @@
         <h1 class="auth__title">Create an account</h1>
         <p class="auth__subtitle">We will email you a code to confirm the address.</p>
 
-        <a-form-item label="Email" required :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
+        <a-form-item label="Email" class="auth__required" :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
           <a-input data-cy="signup-email" v-model:value="email" size="large" type="email" autocomplete="email" placeholder="you@example.com" @blur="touched.email = true">
             <template #prefix><MailOutlined class="auth__icon" /></template>
           </a-input>
         </a-form-item>
 
-        <a-form-item label="Password" required :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
+        <a-form-item label="Password" class="auth__required" :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
           <a-input-password data-cy="signup-password" v-model:value="password" size="large" autocomplete="new-password" placeholder="at least 8 characters" @blur="touched.password = true">
             <template #prefix><LockOutlined class="auth__icon" /></template>
           </a-input-password>
@@ -21,7 +21,7 @@
           </div>
         </a-form-item>
 
-        <a-form-item label="Confirm password" required :validate-status="fieldError.confirm ? 'error' : ''" :help="fieldError.confirm">
+        <a-form-item label="Confirm password" class="auth__required" :validate-status="fieldError.confirm ? 'error' : ''" :help="fieldError.confirm">
           <a-input-password data-cy="signup-confirm" v-model:value="confirm" size="large" autocomplete="new-password" placeholder="repeat your password" @blur="touched.confirm = true">
             <template #prefix><LockOutlined class="auth__icon" /></template>
           </a-input-password>
@@ -45,7 +45,7 @@
           We sent a 6-digit code to <strong>{{ email }}</strong>. Enter it to confirm your address and sign in.
         </p>
 
-        <a-form-item label="Verification code" required>
+        <a-form-item label="Verification code" class="auth__required">
           <a-input ref="otpInput" data-cy="pin" :value="otp" @update:value="otp = digitsOnly($event)" class="auth__otp" size="large" :maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000">
             <template #prefix><SafetyOutlined class="auth__icon" /></template>
           </a-input>
