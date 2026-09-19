@@ -25,26 +25,24 @@
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :lg="8">
         <div class="page__card session">
-          <h3 class="page__h3">Session</h3>
+          <div class="sec"><span class="sec__icon"><ClockCircleOutlined /></span><h3 class="sec__title">Session</h3><span class="sec__count">{{ lifetimeMin }} min token</span></div>
           <div class="session__ring">
             <a-progress type="dashboard" :percent="percentLeft" :stroke-color="ringColor" :size="150" :format="() => remainingShort" />
             <div class="session__caption">{{ remainingLong }}</div>
           </div>
           <a-alert v-if="secondsLeft > 0 && secondsLeft < 300" type="warning" show-icon message="Less than five minutes left — renew, or the next API call will refresh it for you." class="session__warn" />
           <a-alert v-else-if="secondsLeft <= 0" type="error" show-icon message="Access token expired — the next call refreshes it, or renew now." class="session__warn" />
-          <dl class="kv">
-            <dt>Issued</dt><dd>{{ fmt(user.iat) }}</dd>
-            <dt>Expires</dt><dd>{{ fmt(user.exp) }}</dd>
-            <dt>Lifetime</dt><dd>{{ lifetimeMin }} min</dd>
-            <dt>Renewed</dt><dd>{{ renewedTimes }}× this visit</dd>
-          </dl>
-          <p class="page__note">Short-lived access token + revocable refresh token. <em>Renew session</em> calls <code>POST /api/auth/refresh</code> — the same thing the HTTP client does automatically after a 401.</p>
+          <ul class="facts">
+            <li class="fact"><span class="fact__icon"><LoginOutlined /></span><span class="fact__body"><span class="fact__label">Issued</span><span class="fact__value">{{ fmt(user.iat) }}</span></span></li>
+            <li class="fact"><span class="fact__icon"><FieldTimeOutlined /></span><span class="fact__body"><span class="fact__label">Expires</span><span class="fact__value">{{ fmt(user.exp) }}</span></span></li>
+            <li class="fact"><span class="fact__icon"><ReloadOutlined /></span><span class="fact__body"><span class="fact__label">Renewed this visit</span><span class="fact__value">{{ renewedTimes }}×</span></span></li>
+          </ul>
         </div>
       </a-col>
 
       <a-col :xs="24" :lg="8">
         <div class="page__card">
-          <h3 class="page__h3">Security</h3>
+          <div class="sec"><span class="sec__icon"><SafetyCertificateOutlined /></span><h3 class="sec__title">Security</h3><span class="sec__count">{{ providers.google ? '3 methods' : '2 methods' }}</span></div>
           <ul class="methods">
             <li class="method">
               <span class="method__icon"><LockOutlined /></span>
@@ -72,32 +70,32 @@
 
       <a-col :xs="24" :lg="8">
         <div class="page__card">
-          <h3 class="page__h3">Preferences</h3>
+          <div class="sec"><span class="sec__icon"><SettingOutlined /></span><h3 class="sec__title">Preferences</h3></div>
           <div class="pref">
-            <div class="pref__label">Appearance</div>
+            <div class="pref__label"><BgColorsOutlined /> Appearance</div>
             <a-segmented v-model:value="themeChoice" :options="themeOptions" block @change="(v) => theme.set(v === 'system' ? null : v)" />
-            <div class="page__muted" style="margin-top: 0.4rem">Stored in this browser only; follows the OS until you pick one.</div>
+            <div class="page__muted" style="margin-top: 0.4rem">This browser only · System follows the OS.</div>
           </div>
           <div class="pref">
-            <div class="pref__label">Display name <span class="page__muted">(this session)</span></div>
+            <div class="pref__label"><IdcardOutlined /> Display name <span class="page__muted">(this session)</span></div>
             <a-input-search v-model:value="nickname" placeholder="How the header should call you" enter-button="Apply" :maxlength="40" @search="applyNickname" />
-            <div class="page__muted" style="margin-top: 0.4rem">Merged into the store with <code>updateUser</code> — the header updates instantly; the template has no profile-update API, so it is not persisted.</div>
+            <div class="page__muted" style="margin-top: 0.4rem">Updates the header instantly · not saved on the server (the template has no profile API).</div>
           </div>
         </div>
       </a-col>
 
       <a-col :span="24">
         <div class="page__card">
-          <div class="panel__head" style="margin-bottom: 0.5rem">
-            <h3 class="page__h3" style="margin: 0">Token</h3>
-            <a-space>
-              <a-segmented v-model:value="claimView" :options="['Explained', 'Raw JSON']" size="small" />
-              <a-button size="small" @click="copy(claims, 'Claims')"><template #icon><CopyOutlined /></template>copy</a-button>
-            </a-space>
+          <div class="sec">
+            <span class="sec__icon"><KeyOutlined /></span>
+            <h3 class="sec__title">Token</h3>
+            <span class="sec__count">{{ explained.length }} claims</span>
+            <a-segmented v-model:value="claimView" :options="['Explained', 'Raw JSON']" size="small" />
+            <a-tooltip title="Copy claims"><a-button size="small" @click="copy(claims, 'Claims')"><template #icon><CopyOutlined /></template></a-button></a-tooltip>
           </div>
           <div class="token">
             <code class="token__value">{{ maskedToken }}</code>
-            <a-button size="small" type="text" @click="showToken = !showToken">{{ showToken ? 'hide' : 'show' }}</a-button>
+            <a-tooltip :title="showToken ? 'Hide token' : 'Show token'"><a-button size="small" @click="showToken = !showToken"><template #icon><EyeInvisibleOutlined v-if="showToken" /><EyeOutlined v-else /></template></a-button></a-tooltip>
           </div>
           <a-table v-if="claimView === 'Explained'" :data-source="explained" :columns="claimColumns" :pagination="false" size="small" row-key="claim" class="claims" />
           <pre v-else class="code" data-cy="claims">{{ claims }}</pre>
@@ -110,7 +108,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
-import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue'
+import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons-vue'
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
 import { useMainStore } from '../store.js'
 import { http } from '../../common/plugins/fetch.js'
@@ -224,6 +222,13 @@ onBeforeUnmount(() => clearInterval(tick))
 .session__ring { display: grid; justify-items: center; gap: 0.25rem; margin: 0.25rem 0 0.75rem; }
 .session__caption { font-size: 0.85rem; color: var(--p-muted); }
 .session__warn { margin-bottom: 0.75rem; }
+.facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.fact { display: flex; align-items: center; gap: 0.7rem; padding: 0.5rem 0.7rem; border-radius: 10px; background: var(--p-bg); border: 1px solid var(--p-border); }
+.fact__icon { width: 1.9rem; height: 1.9rem; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); flex: none; }
+.fact__body { display: grid; line-height: 1.25; }
+.fact__label { font-size: 0.75rem; color: var(--p-muted); }
+.fact__value { font-weight: 600; font-size: 0.9rem; }
+.pref__label .anticon { color: var(--p-accent); margin-right: 0.25rem; }
 .methods { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
 .method { display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center; padding: 0.6rem 0.75rem; border: 1px solid var(--p-border); border-radius: 10px; background: var(--p-bg); }
 .method__icon { width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); }
