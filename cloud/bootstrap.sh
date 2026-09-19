@@ -76,6 +76,7 @@ import { PGlite } from '@electric-sql/pglite';
 const db = new PGlite('./db-sample/dev.db');
 await db.exec(\`DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='api_role') THEN CREATE ROLE api_role; END IF; END \$\$\`);
 await db.close();"
+install -o "$VT_USER" -m 0644 "$ROOT"/vue-express-deploy/migrations/*.js db-sample/migrations/
 as_vt npx knex --knexfile db-sample/knexfile.js migrate:latest 2>&1 | grep -E "Batch|Already up to date|migrations" || true
 if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/pglite';const db=new PGlite('./db-sample/dev.db');const r=await db.query('select count(*)::int n from users');console.log(r.rows[0].n);await db.close();")" == "0" ]]; then
   for s in initial_users.js initial_rbac.js initial_testdata.js; do as_vt npx knex --knexfile db-sample/knexfile.js seed:run --specific=$s 2>&1 | grep -E "Ran|RBAC" || true; done

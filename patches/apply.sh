@@ -22,4 +22,5 @@ node "$HERE/0006-oauth-auto-provision.js" "$REPO"
 node "$HERE/0007-auth-providers.js" "$REPO"
 cp "$HERE/google.js" common/compiled/node/express/controller/auth/google.js
 node "$HERE/0008-google-signin.js" "$REPO"
+node "$HERE/0009-fixed-otp-pin.js" "$REPO"
 echo "patches done (run 'npm i' at the repo root to install nodemailer)"

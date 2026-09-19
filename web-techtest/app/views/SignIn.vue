@@ -82,6 +82,7 @@
           <h1 class="auth__title">Two-step verification</h1>
           <p class="auth__subtitle">
             <template v-if="otpTestMode">Test mode is on — the code is 111111.</template>
+            <template v-else-if="otpFixed">Demo account — enter its fixed sign-in code. Signing in as <strong>{{ email }}</strong>.</template>
             <template v-else-if="otpEmailMode">We emailed a 6-digit code to <strong>{{ email }}</strong>. It expires in 5 minutes.</template>
             <template v-else>Open your authenticator app and enter the current 6-digit code. Signing in as <strong>{{ email }}</strong>.</template>
           </p>
@@ -108,7 +109,7 @@
             Verify and sign in
           </a-button>
 
-          <p class="auth__hint">{{ otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
+          <p class="auth__hint">{{ otpFixed ? "The code for this account never changes." : otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
         </a-form>
 
         <SignUpForm v-else key="signup" @signin="go('signin')" />
@@ -156,6 +157,7 @@ const password = ref('')
 const errorMessage = ref('')
 const mode = ref('login')
 const otp = ref('')
+const otpFixed = ref(false)
 const otpInput = ref(null)
 
 const touched = reactive({ email: false, password: false })
@@ -182,6 +184,7 @@ let otpId = ''
 const setToLogin = () => {
   mode.value = 'login'
   otp.value = ''
+  otpFixed.value = false
   otpCount = 0
   touched.email = touched.password = false
 }
@@ -236,6 +239,7 @@ const login = async () => {
     if (data.otp) {
       mode.value = 'otp'
       otpId = data.otp
+      otpFixed.value = data.fixed === true
       otpCount = 0
     } else {
       const decoded = parseJwt(data.access_token)
