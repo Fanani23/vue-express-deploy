@@ -132,7 +132,7 @@ const finishLogin = async (data) => {
   const decoded = parseJwt(data.access_token)
   http.setTokens({ access: data.access_token, refresh: data.refresh_token })
   http.setOptions({ refreshUrl: VITE_REFRESH_URL })
-  await store.doLogin(decoded)
+  await store.doLogin({ ...decoded, user_meta: data?.user_meta })
 }
 
 const signup = async () => {

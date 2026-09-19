@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+#
+# Optional environment: WEB_ORIGIN (public origin of the Vue app, for TaskPulse CORS) and
+# TASKPULSE_URL (public base URL of TaskPulse, baked into the Vue build). Both default to http://<public ip>[:8088].
+# USE_OTP (EMAIL|GA|TEST, default EMAIL).
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 VT_USER=vt
@@ -11,6 +15,9 @@ log()  { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 as_vt() { sudo -u "$VT_USER" -H env PATH="$PATH" DOTNET_CLI_TELEMETRY_OPTOUT=1 "$@"; }
 
 [[ $EUID -eq 0 ]] || { echo "run as root: sudo bash $0" >&2; exit 1; }
+PUBLIC_IP="$(curl -fs -m 3 http://checkip.amazonaws.com 2>/dev/null || hostname -I | awk '{print $1}')"
+WEB_ORIGIN="${WEB_ORIGIN:-http://$PUBLIC_IP}"
+TASKPULSE_URL="${TASKPULSE_URL:-http://$PUBLIC_IP:8088}"
 [[ -d "$ROOT/taskpulse" ]] || { echo "expected $ROOT/taskpulse (run from the extracted submission)" >&2; exit 1; }
 . /etc/os-release
 log "Ubuntu $VERSION_ID on $(uname -m), $(free -m | awk '/Mem:/{print $2}') MB RAM"
@@ -101,6 +108,7 @@ BASE_PATH=/
 VITE_REFRESH_URL=/api/auth/refresh
 VITE_LOGOUT_URL=/api/auth/logout
 EOF
+echo "VITE_TASKPULSE_URL=$TASKPULSE_URL" >> web-techtest/envs/.env.cloud
 chown "$VT_USER" web-techtest/envs/.env.cloud
 as_vt npx vite build --config web-techtest/vite.config.js --mode cloud --logLevel error
 DIST="$VT_HOME/vue-antd-template/apps/web-techtest/dist"
@@ -186,7 +194,7 @@ ln -sf /etc/nginx/sites-available/vue-express.conf /etc/nginx/sites-enabled/vue-
 
 log "TaskPulse: scripts/install.sh (PostgreSQL roles, publish, hardened units, nginx :8088)"
 chmod +x "$ROOT/taskpulse/scripts/"*.sh
-if ! SUDO_USER="${SUDO_USER:-root}" bash "$ROOT/taskpulse/scripts/install.sh"; then
+if ! SUDO_USER="${SUDO_USER:-root}" TASKPULSE_ALLOWED_ORIGINS="$WEB_ORIGIN" bash "$ROOT/taskpulse/scripts/install.sh"; then
   echo "TaskPulse install.sh failed - see output above" >&2; exit 1
 fi
 log "TaskPulse: sample tasks through the API (scripts/seed.sh, skipped when the table is not empty)"
@@ -202,7 +210,6 @@ else
 fi
 
 nginx -t && systemctl reload nginx
-PUBLIC_IP="$(curl -fs -m 3 http://checkip.amazonaws.com 2>/dev/null || hostname -I | awk '{print $1}')"
 sleep 3
 log "Verification"
 for chk in "http://127.0.0.1/api/healthcheck|Vue+Express API" "http://127.0.0.1/|Vue+Express web" "http://127.0.0.1:8088/health/ready|TaskPulse API" "http://127.0.0.1:8088/|TaskPulse WS"; do

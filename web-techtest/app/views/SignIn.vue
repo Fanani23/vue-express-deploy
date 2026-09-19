@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
 })
 
 const _setUser = async (data, decoded) => {
-  await store.doLogin(decoded)
+  await store.doLogin({ ...decoded, user_meta: data?.user_meta })
 }
 
 const login = async () => {
