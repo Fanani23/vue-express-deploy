@@ -83,12 +83,8 @@ if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/
 else
   echo "  already seeded"
 fi
-as_vt node --input-type=module -e "
-import { PGlite } from '@electric-sql/pglite';
-const db = new PGlite('./db-sample/dev.db');
-const r = await db.query(\"UPDATE users SET otp_pin = '111111' WHERE email IN ('test','ais-one','aaronjxz') AND otp_pin IS NULL\");
-console.log('  seeded accounts with fixed code 111111: ' + r.affectedRows + ' updated');
-await db.close();"
+install -o "$VT_USER" -m 0644 "$ROOT/vue-express-deploy/patches/seed-demo-accounts.mjs" ./seed-demo-accounts.mjs
+as_vt node ./seed-demo-accounts.mjs
 
 log "Vue+Express: apply the web-techtest overlay (custom app, per the template README)"
 as_vt bash "$ROOT/vue-express-deploy/web-techtest/apply.sh" "$VT_HOME/vue-antd-template" | sed 's/^/  /'

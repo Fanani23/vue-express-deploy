@@ -64,6 +64,7 @@ const signup = async (req, res) => {
     const id = await authFns.createUser({
       [AUTH_USER_FIELD_LOGIN]: email,
       username: email.split('@')[0],
+      roles: process.env.SIGNUP_DEFAULT_ROLE || 'TestGroup',
       [AUTH_USER_FIELD_SALT]: salt,
       [AUTH_USER_FIELD_PASSWORD]: await setScryptHash(password, salt),
       [AUTH_USER_FIELD_GAKEY]: gaKey,
