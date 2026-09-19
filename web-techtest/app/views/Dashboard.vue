@@ -153,11 +153,6 @@ onMounted(async () => {
 .stat2__trend[data-tone="up"] { background: rgba(22, 163, 74, 0.12); color: #16a34a; }
 .stat2__trend[data-tone="down"] { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
 
-.sec { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.9rem; }
-.sec__icon { width: 1.9rem; height: 1.9rem; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); font-size: 0.95rem; }
-.sec__title { margin: 0; font-size: 1rem; font-weight: 600; flex: 1; }
-.sec__count { font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 999px; background: var(--p-bg); border: 1px solid var(--p-border); color: var(--p-muted); }
-
 .team { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 .member { display: grid; justify-items: center; gap: 0.2rem; padding: 0.9rem 0.5rem; border-radius: 12px; background: var(--p-bg); border: 1px solid var(--p-border); text-align: center; }
 .member__avatar { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 1.2rem; margin-bottom: 0.25rem; }
@@ -172,7 +167,4 @@ onMounted(async () => {
 .comment__title:hover { color: var(--p-accent); }
 .comment__text { margin: 0.15rem 0 0; font-size: 0.85rem; color: var(--p-muted); }
 
-.empty { display: grid; justify-items: center; gap: 0.25rem; padding: 1.5rem 1rem; border-radius: 12px; border: 1px dashed var(--p-border); color: var(--p-muted); font-size: 0.9rem; }
-.empty__icon { font-size: 1.6rem; opacity: 0.6; margin-bottom: 0.2rem; }
-.empty__hint { font-size: 0.78rem; }
 </style>

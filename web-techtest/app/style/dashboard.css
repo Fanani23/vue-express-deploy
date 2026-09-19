@@ -49,8 +49,33 @@
 .feed__empty { color: var(--d-muted); font-size: 0.85rem; padding: 0.5rem; text-align: center; }
 @keyframes feed-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 
+.dash .page__head { margin-bottom: 1rem; }
 .dash__alert { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; width: min(100% - 2rem, 28rem); }
 .pop-enter-active { transition: opacity 0.2s ease, transform 0.25s var(--d-ease); }
 .pop-leave-active { transition: opacity 0.15s ease, transform 0.15s ease; }
 .pop-enter-from, .pop-leave-to { opacity: 0; transform: translateY(8px) scale(0.98); }
 @media (prefers-reduced-motion: reduce) { .stat, .stat__bar i, .feed__item { transition: none; animation: none; } }
+
+.stat__row { display: flex; align-items: center; gap: 0.8rem; }
+.stat__icon { flex: none; width: 2.6rem; height: 2.6rem; border-radius: 10px; display: grid; place-items: center; font-size: 1.15rem; background: color-mix(in srgb, var(--d-accent) 12%, transparent); color: var(--d-accent); }
+.stat__icon[data-status="Todo"] { background: color-mix(in srgb, var(--d-todo) 20%, transparent); color: var(--d-todo); }
+.stat__icon[data-status="InProgress"] { background: color-mix(in srgb, var(--d-progress) 15%, transparent); color: var(--d-progress); }
+.stat__icon[data-status="Done"] { background: color-mix(in srgb, var(--d-done) 15%, transparent); color: var(--d-done); }
+.stat__body { display: grid; gap: 0.1rem; min-width: 0; }
+.stat__value { font-size: 1.6rem; }
+.pill .anticon { margin-right: 0.35rem; }
+.new-task__icon { color: var(--d-muted); }
+.task { display: flex; gap: 0.7rem; align-items: flex-start; }
+.task__mark { flex: none; width: 1.6rem; height: 1.6rem; border-radius: 6px; display: grid; place-items: center; font-size: 0.8rem; margin-top: 0.1rem; background: color-mix(in srgb, var(--d-todo) 20%, transparent); color: var(--d-todo); }
+.task__mark[data-status="InProgress"] { background: color-mix(in srgb, var(--d-progress) 15%, transparent); color: var(--d-progress); }
+.task__mark[data-status="Done"] { background: color-mix(in srgb, var(--d-done) 15%, transparent); color: var(--d-done); }
+.task__text { min-width: 0; }
+.task__status { width: 100%; background: var(--d-bg); border-radius: 8px; }
+.task__when { display: inline-flex; align-items: center; gap: 0.35rem; color: var(--d-muted); font-size: 0.85rem; white-space: nowrap; }
+.task__btn { color: var(--d-muted); }
+.task__btn:hover { color: var(--d-accent); }
+.tasks .ant-table-thead > tr > th { background: var(--d-bg); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--d-muted); }
+.feedcard { display: flex; flex-direction: column; min-height: 100%; }
+.feed__tools { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+.feed { flex: 1; max-height: 34rem; }
+.feed .empty { list-style: none; }
