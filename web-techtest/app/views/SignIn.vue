@@ -38,7 +38,7 @@
 
     <main ref="panel" class="auth__panel">
       <transition :name="'slide-' + direction" mode="out-in" @after-enter="focusFirstField">
-        <a-form v-if="view === 'login'" key="login" layout="vertical" class="auth__form" @finish="login">
+        <a-form v-if="view === 'login'" key="login" layout="vertical" class="auth__form" @submit="login">
           <h1 class="auth__title">Welcome back</h1>
           <p class="auth__subtitle">Sign in to continue to your dashboard.</p>
 
@@ -76,7 +76,7 @@
           <p class="auth__hint" v-else>After your password, enter the code from your authenticator app.</p>
         </a-form>
 
-        <a-form v-else-if="view === 'otp'" key="otp" layout="vertical" class="auth__form" @finish="otpLogin">
+        <a-form v-else-if="view === 'otp'" key="otp" layout="vertical" class="auth__form" @submit="otpLogin">
           <a-button type="text" class="auth__back" @click="setToLogin">
             <template #icon><ArrowLeftOutlined /></template>
             Back

@@ -1,7 +1,7 @@
 <template>
   <div class="auth__stack">
     <transition :name="'slide-' + direction" mode="out-in">
-      <a-form v-if="mode === 'form'" key="form" layout="vertical" class="auth__form" @finish="signup">
+      <a-form v-if="mode === 'form'" key="form" layout="vertical" class="auth__form" @submit="signup">
         <h1 class="auth__title">Create an account</h1>
         <p class="auth__subtitle">We will email you a code to confirm the address.</p>
 
@@ -35,7 +35,7 @@
         <p class="auth__hint">Already have an account? <a href="/signin" @click.prevent="$emit('signin')">Sign in</a></p>
       </a-form>
 
-      <a-form v-else key="otp" layout="vertical" class="auth__form" @finish="verifyOtp">
+      <a-form v-else key="otp" layout="vertical" class="auth__form" @submit="verifyOtp">
         <a-button type="text" class="auth__back" @click="mode = 'form'">
           <template #icon><ArrowLeftOutlined /></template>
           Back
