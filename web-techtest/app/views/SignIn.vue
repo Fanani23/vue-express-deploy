@@ -63,15 +63,11 @@
             Sign in with email
           </a-button>
 
-          <template v-if="providers.google || providers.github">
+          <template v-if="providers.google">
             <a-divider plain class="auth__divider">or</a-divider>
-            <a-button v-if="providers.google" size="large" block class="auth__social" @click="googleLogin">
+            <a-button size="large" block class="auth__social" @click="googleLogin">
               <template #icon><GoogleOutlined /></template>
               Continue with Google
-            </a-button>
-            <a-button v-if="providers.github" size="large" block class="auth__social" @click="oauthLogin">
-              <template #icon><GithubOutlined /></template>
-              Continue with GitHub
             </a-button>
           </template>
 
@@ -88,7 +84,6 @@
           <h1 class="auth__title">Two-step verification</h1>
           <p class="auth__subtitle">
             <template v-if="otpTestMode">Test mode is on — the code is 111111.</template>
-            <template v-else-if="otpFixed">Demo account — enter its fixed sign-in code. Signing in as <strong>{{ email }}</strong>.</template>
             <template v-else-if="otpEmailMode">We emailed a 6-digit code to <strong>{{ email }}</strong>. It expires in 5 minutes.</template>
             <template v-else>Open your authenticator app and enter the current 6-digit code. Signing in as <strong>{{ email }}</strong>.</template>
           </p>
@@ -115,7 +110,7 @@
             Verify and sign in
           </a-button>
 
-          <p class="auth__hint">{{ otpFixed ? "The code for this account never changes." : otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
+          <p class="auth__hint">{{ otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
         </a-form>
 
         <SignUpForm v-else key="signup" @signin="go('signin')" />
@@ -140,16 +135,16 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 import { useMainStore } from '../store.js'
 import { useRoute, useRouter } from 'vue-router'
-import { UserOutlined, MailOutlined, LockOutlined, SafetyOutlined, GithubOutlined, GoogleOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
+import { UserOutlined, MailOutlined, LockOutlined, SafetyOutlined, GoogleOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
 
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
 
 import { http } from '../../common/plugins/fetch.js'
 import SignUpForm from '../components/SignUpForm.vue'
 
-const { VITE_REFRESH_URL, VITE_APP_TITLE, VITE_OTP_MODE, VITE_OAUTH_CLIENT_ID, MODE } = import.meta.env
+const { VITE_REFRESH_URL, VITE_APP_TITLE, VITE_OTP_MODE } = import.meta.env
 const appTitle = VITE_APP_TITLE || 'My App'
-const providers = ref({ github: false, google: false, githubClientId: '', otp: VITE_OTP_MODE || '' })
+const providers = ref({ google: false, otp: VITE_OTP_MODE || '' })
 
 const googleLogin = () => {
   window.location.assign(`${import.meta.env.VITE_API_URL || ''}/api/google/login`)
@@ -163,7 +158,6 @@ const password = ref('')
 const errorMessage = ref('')
 const mode = ref('login')
 const otp = ref('')
-const otpFixed = ref(false)
 const otpInput = ref(null)
 
 const touched = reactive({ email: false, password: false })
@@ -190,7 +184,6 @@ let otpId = ''
 const setToLogin = () => {
   mode.value = 'login'
   otp.value = ''
-  otpFixed.value = false
   otpCount = 0
   touched.email = touched.password = false
 }
@@ -245,7 +238,6 @@ const login = async () => {
     if (data.otp) {
       mode.value = 'otp'
       otpId = data.otp
-      otpFixed.value = data.fixed === true
       otpCount = 0
     } else {
       const decoded = parseJwt(data.access_token)
@@ -284,21 +276,6 @@ const otpLogin = async () => {
     }
   }
   store.loading = false
-}
-
-const oauthLogin = () => {
-  if (MODE === 'mocked') {
-    window.location.assign('/callback#mocked')
-  } else {
-    const OAUTH_CLIENT_ID = providers.value.githubClientId || VITE_OAUTH_CLIENT_ID
-    if (!OAUTH_CLIENT_ID) {
-      errorMessage.value = 'GitHub sign-in is not configured on the server.'
-      return
-    }
-    const OAUTH_URL = 'https://github.com/login/oauth/authorize?scope=user:email&client_id'
-    http.setOptions({ refreshUrl: VITE_REFRESH_URL })
-    window.location.replace(`${OAUTH_URL}=${OAUTH_CLIENT_ID}`)
-  }
 }
 
 const router = useRouter()

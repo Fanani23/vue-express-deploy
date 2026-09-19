@@ -10,8 +10,8 @@ import * as google from '@common/node/express/controller/auth/google';`);
   r = r.replace(`export const oauthRoute = express.Router().get('/callback', oauth.callbackOAuth);`,
                 `export const oauthRoute = express.Router().get('/callback', oauth.callbackOAuth);
 export const googleRoute = express.Router().get('/login', google.login).get('/callback', google.callback);`);
-  r = r.replace(`      github: usable(id) && usable(secret),`,
-                `      github: usable(id) && usable(secret),
+  r = r.replace(`      otp: process.env.USE_OTP || '',`,
+                `      otp: process.env.USE_OTP || '',
       google: google.enabled(),`);
   if (!r.includes("googleRoute") || !r.includes("google: google.enabled()")) { console.error("routes/auth.js markers not found (apply 0007 first)"); process.exit(1); }
   fs.writeFileSync(rf, r); console.log("patched apps/sample-api/src/routes/auth.js (google)");
@@ -26,5 +26,3 @@ if (!i.includes("auth.googleRoute")) {
     router.use('/google', auth.googleRoute),`);
   fs.writeFileSync(idx, i); console.log("patched apps/sample-api/src/routes/index.js (google)");
 } else console.log("already patched routes/index.js (google)");
-
-console.log("google controller: common/compiled/node/express/controller/auth/google.js (copied by apply.sh)");

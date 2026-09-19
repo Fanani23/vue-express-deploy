@@ -16,12 +16,8 @@ apply_diff "$HERE"/0002-otp-await-verify.diff  "await verify\("               co
 cp "$HERE/mailer.js" common/compiled/node/services/mailer.js
 if grep -q "consumeOtpCode" common/compiled/node/auth/keyv.js; then echo "already  0003-email-otp-and-oauth-env.js"
 else node "$HERE/0003-email-otp-and-oauth-env.js" "$REPO" && echo "applied  0003-email-otp-and-oauth-env.js"; fi
-node "$HERE/0004-oauth-callback-alias.js" "$REPO"
 node "$HERE/0005-signup.js" "$REPO"
-node "$HERE/0006-oauth-auto-provision.js" "$REPO"
 node "$HERE/0007-auth-providers.js" "$REPO"
 cp "$HERE/google.js" common/compiled/node/express/controller/auth/google.js
 node "$HERE/0008-google-signin.js" "$REPO"
-node "$HERE/0009-fixed-otp-pin.js" "$REPO"
-node "$HERE/0010-new-account-viewer.js" "$REPO"
 echo "patches done (run 'npm i' at the repo root to install nodemailer)"
