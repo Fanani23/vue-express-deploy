@@ -192,6 +192,8 @@ chmod +x "$ROOT/taskpulse/scripts/"*.sh
 if ! SUDO_USER="${SUDO_USER:-root}" bash "$ROOT/taskpulse/scripts/install.sh"; then
   echo "TaskPulse install.sh failed - see output above" >&2; exit 1
 fi
+log "TaskPulse: sample tasks through the API (scripts/seed.sh, skipped when the table is not empty)"
+bash "$ROOT/taskpulse/scripts/seed.sh" http://127.0.0.1:8088 | sed 's/^/  /'
 
 log "Firewall: 22, 80, 8088"
 if grep -qi microsoft /proc/version; then
