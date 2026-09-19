@@ -5,14 +5,14 @@
         <h1 class="auth__title">Create an account</h1>
         <p class="auth__subtitle">We will email you a code to confirm the address.</p>
 
-        <a-form-item label="Email">
-          <a-input data-cy="signup-email" v-model:value="email" size="large" type="email" autocomplete="email" placeholder="you@example.com">
+        <a-form-item label="Email" required :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
+          <a-input data-cy="signup-email" v-model:value="email" size="large" type="email" autocomplete="email" placeholder="you@example.com" @blur="touched.email = true">
             <template #prefix><MailOutlined class="auth__icon" /></template>
           </a-input>
         </a-form-item>
 
-        <a-form-item label="Password" :help="passwordHelp" :validate-status="passwordStatus">
-          <a-input-password data-cy="signup-password" v-model:value="password" size="large" autocomplete="new-password" placeholder="at least 8 characters">
+        <a-form-item label="Password" required :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
+          <a-input-password data-cy="signup-password" v-model:value="password" size="large" autocomplete="new-password" placeholder="at least 8 characters" @blur="touched.password = true">
             <template #prefix><LockOutlined class="auth__icon" /></template>
           </a-input-password>
           <div class="strength" :data-level="strength.level" aria-live="polite">
@@ -21,13 +21,13 @@
           </div>
         </a-form-item>
 
-        <a-form-item label="Confirm password" :validate-status="confirm && confirm !== password ? 'error' : ''" :help="confirm && confirm !== password ? 'Passwords do not match' : ''">
-          <a-input-password data-cy="signup-confirm" v-model:value="confirm" size="large" autocomplete="new-password" placeholder="repeat your password">
+        <a-form-item label="Confirm password" required :validate-status="fieldError.confirm ? 'error' : ''" :help="fieldError.confirm">
+          <a-input-password data-cy="signup-confirm" v-model:value="confirm" size="large" autocomplete="new-password" placeholder="repeat your password" @blur="touched.confirm = true">
             <template #prefix><LockOutlined class="auth__icon" /></template>
           </a-input-password>
         </a-form-item>
 
-        <a-button data-cy="signup" type="primary" size="large" block html-type="submit" :loading="store.loading">
+        <a-button data-cy="signup" type="primary" size="large" block html-type="submit" :loading="store.loading" :disabled="!canSubmit">
           <template #icon><MailOutlined /></template>
           Sign up with email
         </a-button>
@@ -45,13 +45,13 @@
           We sent a 6-digit code to <strong>{{ email }}</strong>. Enter it to confirm your address and sign in.
         </p>
 
-        <a-form-item label="Verification code">
-          <a-input ref="otpInput" data-cy="pin" v-model:value="otp" class="auth__otp" size="large" :maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000">
+        <a-form-item label="Verification code" required>
+          <a-input ref="otpInput" data-cy="pin" :value="otp" @update:value="otp = digitsOnly($event)" class="auth__otp" size="large" :maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" placeholder="000000">
             <template #prefix><SafetyOutlined class="auth__icon" /></template>
           </a-input>
         </a-form-item>
 
-        <a-button data-cy="otp" type="primary" size="large" block html-type="submit" :loading="store.loading" :disabled="otp.length !== 6">
+        <a-button data-cy="otp" type="primary" size="large" block html-type="submit" :loading="store.loading" :disabled="otp.length !== 6 || store.loading">
           Confirm and sign in
         </a-button>
 
@@ -66,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
 import { useMainStore } from '../store.js'
 import { MailOutlined, LockOutlined, SafetyOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
@@ -77,6 +77,10 @@ defineEmits(['signin'])
 const { VITE_REFRESH_URL } = import.meta.env
 const store = useMainStore()
 
+const PASSWORD_MIN = 8
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const digitsOnly = (v) => String(v ?? '').replace(/\D/g, '').slice(0, 6)
+
 const mode = ref('form')
 const email = ref('')
 const password = ref('')
@@ -84,6 +88,7 @@ const confirm = ref('')
 const otp = ref('')
 const otpInput = ref(null)
 const errorMessage = ref('')
+const touched = reactive({ email: false, password: false, confirm: false })
 let otpId = ''
 
 const direction = ref('left')
@@ -93,14 +98,33 @@ watch(mode, (m) => {
   if (m === 'otp') nextTick(() => otpInput.value?.focus?.())
 })
 
-const emailOk = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()))
-const passwordStatus = computed(() => (password.value && password.value.length < 8 ? 'error' : ''))
-const passwordHelp = computed(() => (password.value && password.value.length < 8 ? 'At least 8 characters' : ''))
+const emailError = computed(() => {
+  const v = email.value.trim()
+  if (!v) return 'Email is required'
+  if (!EMAIL_RE.test(v)) return 'Enter a valid email address'
+  return ''
+})
+const passwordError = computed(() => {
+  if (!password.value) return 'Password is required'
+  if (password.value.length < PASSWORD_MIN) return `At least ${PASSWORD_MIN} characters`
+  return ''
+})
+const confirmError = computed(() => {
+  if (!confirm.value) return 'Please repeat your password'
+  if (confirm.value !== password.value) return 'Passwords do not match'
+  return ''
+})
+const fieldError = computed(() => ({
+  email: touched.email ? emailError.value : '',
+  password: touched.password ? passwordError.value : '',
+  confirm: touched.confirm ? confirmError.value : '',
+}))
+const canSubmit = computed(() => !emailError.value && !passwordError.value && !confirmError.value && !store.loading)
 
 const strength = computed(() => {
   const p = password.value
   if (!p) return { level: 0, label: '' }
-  const score = [p.length >= 8, /[a-z]/.test(p) && /[A-Z]/.test(p), /\d/.test(p), /[^\w\s]/.test(p)].filter(Boolean).length
+  const score = [p.length >= PASSWORD_MIN, /[a-z]/.test(p) && /[A-Z]/.test(p), /\d/.test(p), /[^\w\s]/.test(p)].filter(Boolean).length
   return { level: score, label: ['Too short', 'Weak', 'Fair', 'Good', 'Strong'][score] }
 })
 
@@ -112,10 +136,8 @@ const finishLogin = async (data) => {
 }
 
 const signup = async () => {
-  if (store.loading) return
-  if (!emailOk.value) { errorMessage.value = 'Enter a valid email address'; return }
-  if (password.value.length < 8) { errorMessage.value = 'Password must be at least 8 characters'; return }
-  if (confirm.value !== password.value) { errorMessage.value = 'Passwords do not match'; return }
+  touched.email = touched.password = touched.confirm = true
+  if (!canSubmit.value) return
   store.loading = true
   errorMessage.value = ''
   try {
@@ -134,7 +156,7 @@ const signup = async () => {
 }
 
 const verifyOtp = async () => {
-  if (store.loading) return
+  if (store.loading || otp.value.length !== 6) return
   store.loading = true
   errorMessage.value = ''
   try {

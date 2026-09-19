@@ -36,14 +36,14 @@
           <h1 class="auth__title">Welcome back</h1>
           <p class="auth__subtitle">Sign in to continue to your dashboard.</p>
 
-          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'">
-            <a-input data-cy="username" v-model:value="email" size="large" :type="otpEmailMode ? 'email' : 'text'" autocomplete="username" placeholder="you@example.com">
+          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'" required :validate-status="fieldError.email ? 'error' : ''" :help="fieldError.email">
+            <a-input data-cy="username" v-model:value="email" size="large" :type="otpEmailMode ? 'email' : 'text'" autocomplete="username" placeholder="you@example.com" @blur="touched.email = true">
               <template #prefix><UserOutlined class="auth__icon" /></template>
             </a-input>
           </a-form-item>
 
-          <a-form-item label="Password">
-            <a-input-password data-cy="password" v-model:value="password" size="large" autocomplete="current-password" placeholder="••••••••">
+          <a-form-item label="Password" required :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
+            <a-input-password data-cy="password" v-model:value="password" size="large" autocomplete="current-password" placeholder="••••••••" @blur="touched.password = true">
               <template #prefix><LockOutlined class="auth__icon" /></template>
             </a-input-password>
           </a-form-item>
@@ -52,7 +52,7 @@
             <a href="/signup" @click.prevent="go('signup')">Create an account</a>
           </div>
 
-          <a-button data-cy="login" type="primary" size="large" block html-type="submit" :loading="store.loading">
+          <a-button data-cy="login" type="primary" size="large" block html-type="submit" :loading="store.loading" :disabled="!canSubmit">
             <template #icon><MailOutlined /></template>
             Sign in with email
           </a-button>
@@ -90,7 +90,8 @@
             <a-input
               ref="otpInput"
               data-cy="pin"
-              v-model:value="otp"
+              :value="otp"
+              @update:value="otp = digitsOnly($event)"
               class="auth__otp"
               size="large"
               :maxlength="6"
@@ -129,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 import { useMainStore } from '../store.js'
 import { useRoute, useRouter } from 'vue-router'
 import { UserOutlined, MailOutlined, LockOutlined, SafetyOutlined, GithubOutlined, GoogleOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
@@ -157,6 +158,23 @@ const mode = ref('login')
 const otp = ref('')
 const otpInput = ref(null)
 
+const touched = reactive({ email: false, password: false })
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const digitsOnly = (v) => String(v ?? '').replace(/\D/g, '').slice(0, 6)
+
+const emailError = computed(() => {
+  const v = email.value.trim()
+  if (!v) return otpEmailMode.value ? 'Email is required' : 'Username or email is required'
+  if (otpEmailMode.value && !EMAIL_RE.test(v)) return 'Enter a valid email address'
+  return ''
+})
+const passwordError = computed(() => (password.value ? '' : 'Password is required'))
+const fieldError = computed(() => ({
+  email: touched.email ? emailError.value : '',
+  password: touched.password ? passwordError.value : '',
+}))
+const canSubmit = computed(() => !emailError.value && !passwordError.value && !store.loading)
+
 const forced = ref(false)
 let otpCount = 0
 let otpId = ''
@@ -165,6 +183,7 @@ const setToLogin = () => {
   mode.value = 'login'
   otp.value = ''
   otpCount = 0
+  touched.email = touched.password = false
 }
 
 watch(mode, (m) => {
@@ -205,7 +224,8 @@ const login = async () => {
     return
   }
   if (store.value) return
-  if (!email.value.trim() || !password.value) { errorMessage.value = 'Enter your email and password'; return }
+  touched.email = touched.password = true
+  if (!canSubmit.value) return
   store.loading = true
   errorMessage.value = ''
   try {
