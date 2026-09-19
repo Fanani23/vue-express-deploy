@@ -4,7 +4,7 @@
     <a-back-top />
     <a-layout-sider v-model:collapsed="collapsed" :trigger="null" collapsible :collapsed-width="0" :width="232" class="shell__sider">
       <router-link to="/dashboard" class="brand">
-        <span class="brand__logo">V</span>
+        <span class="brand__logo"><BrandMark /></span>
         <span class="brand__name">{{ appTitle }}</span>
       </router-link>
       <a-menu class="shell__menu" theme="dark" mode="inline" v-model:selectedKeys="selectedKeys">
@@ -51,6 +51,7 @@
 import { onMounted, onUnmounted, onBeforeUnmount, ref, reactive, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { MenuUnfoldOutlined, MenuFoldOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import BrandMark from '../components/BrandMark.vue'
 import { useMainStore } from '../store.js'
 import { SECURE_ROUTES } from '../setups/routes.js'
 import { onLogin, onLogout } from '../setups/events.js'

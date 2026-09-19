@@ -7,12 +7,7 @@
       <svg class="brand__edge brand__edge--bottom" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
         <path d="M0 100 L0 62 C 180 28, 380 92, 580 52 C 760 16, 900 48, 1000 70 L1000 100 Z" />
       </svg>
-      <div class="brand__logo">
-        <svg viewBox="0 0 261.76 226.69" aria-hidden="true">
-          <path d="M161.096.001l-30.225 52.351L100.647.001H-.005l130.877 226.688L261.749.001z" fill="#41b883" />
-          <path d="M161.096.001l-30.225 52.351L100.647.001H52.346l78.526 136.01L209.398.001z" fill="#34495e" />
-        </svg>
-      </div>
+      <div class="brand__logo"><BrandMark /></div>
       <transition name="brand-swap" mode="out-in">
         <div v-if="!isSignup" key="in" class="brand__copy">
           <h2 class="brand__title">{{ appTitle }}</h2>
@@ -147,6 +142,7 @@ import parseJwt from '@es-labs/jslib/web/parse-jwt'
 
 import { http } from '../../common/plugins/fetch.js'
 import SignUpForm from '../components/SignUpForm.vue'
+import BrandMark from '../components/BrandMark.vue'
 
 const { VITE_REFRESH_URL, VITE_APP_TITLE, VITE_OTP_MODE } = import.meta.env
 const appTitle = VITE_APP_TITLE || 'My App'
