@@ -15,6 +15,5 @@ if ! command -v node >/dev/null 2>&1 && [[ -s "$HOME/.nvm/nvm.sh" ]]; then . "$H
 node "$OVERLAY/register-app.js" "$APPS/package.json"
 grep -q '^!web-techtest$' "$APPS/.gitignore" || echo '!web-techtest' >> "$APPS/.gitignore"
 
-node "$OVERLAY/add-signup-route.js" "$APPS/web-techtest/setups/routes.js"
 
 echo "web-techtest ready: $(cd "$OVERLAY/app" && find . -type f | sed 's|^\./||' | tr '\n' ' ')"

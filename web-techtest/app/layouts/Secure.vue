@@ -48,7 +48,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, onBeforeUnmount, ref, reactive, computed } from 'vue'
+import { onMounted, onUnmounted, onBeforeUnmount, ref, reactive, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { MenuUnfoldOutlined, MenuFoldOutlined, LogoutOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
@@ -77,6 +77,12 @@ const roles = computed(() => {
 })
 const initials = computed(() => identity.value.replace(/@.*/, '').slice(0, 2).toUpperCase())
 
+const syncSelection = () => {
+  const parts = route.path.split('/')
+  selectedKeys.value = [(parts.length === 3 ? 'sm-' : 'm-') + route.path]
+}
+watch(() => route.path, syncSelection)
+
 const toPascalCase = (str) => {
   str = str.replace(/-\w/g, (x) => ` ${x[1].toUpperCase()}`)
   return str[0].toUpperCase() + str.substring(1, str.length)
@@ -103,7 +109,7 @@ onMounted(async () => {
       }
     }
   })
-  selectedKeys.value = ['m-' + route.path]
+  syncSelection()
   onLogin && onLogin()
 })
 onUnmounted(() => {})
