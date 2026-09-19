@@ -51,13 +51,12 @@ if ! dotnet --list-sdks 2>/dev/null | grep -q '^10\.'; then
 fi
 dotnet --version
 
-log "Vue+Express: user and application code"
+log "Vue+Express: user and clones"
 id -u "$VT_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "$VT_HOME" --shell /usr/sbin/nologin "$VT_USER"
 chmod 755 "$VT_HOME"
 cd "$VT_HOME"
-for app in express-template vue-antd-template; do
-  mkdir -p "$app" && cp -a "$ROOT/vue-express-deploy/$app/." "$app/" && chown -R "$VT_USER" "$app"
-done
+[[ -d express-template  ]] || as_vt git clone -q https://github.com/es-labs/express-template.git
+[[ -d vue-antd-template ]] || as_vt git clone -q https://github.com/es-labs/vue-antd-template.git
 
 log "Vue+Express: npm install (backend workspace, dbdeploy, frontend)"
 ( cd express-template            && as_vt npm i --no-audit --no-fund --loglevel=error )
@@ -65,6 +64,9 @@ log "Vue+Express: npm install (backend workspace, dbdeploy, frontend)"
 ( cd vue-antd-template           && as_vt npm i --no-audit --no-fund --loglevel=error )
 ( cd vue-antd-template/apps      && as_vt npm i --no-audit --no-fund --loglevel=error )
 
+log "Vue+Express: template patches (findings 4-5 in docs/vue-express-notes.md, EMAIL OTP, OAuth secrets from env)"
+as_vt bash "$ROOT/vue-express-deploy/patches/apply.sh" "$VT_HOME/express-template" | sed 's/^/  /'
+( cd "$VT_HOME/express-template" && as_vt npm i --no-audit --no-fund --loglevel=error )
 
 log "Vue+Express: database (PGlite) - api_role, migrations, seeds in dependency order"
 systemctl stop vt-api vt-db 2>/dev/null || true
@@ -74,12 +76,16 @@ import { PGlite } from '@electric-sql/pglite';
 const db = new PGlite('./db-sample/dev.db');
 await db.exec(\`DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='api_role') THEN CREATE ROLE api_role; END IF; END \$\$\`);
 await db.close();"
+install -o "$VT_USER" -m 0644 "$ROOT"/vue-express-deploy/migrations/*.js db-sample/migrations/
 as_vt npx knex --knexfile db-sample/knexfile.js migrate:latest 2>&1 | grep -E "Batch|Already up to date|migrations" || true
 if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/pglite';const db=new PGlite('./db-sample/dev.db');const r=await db.query('select count(*)::int n from users');console.log(r.rows[0].n);await db.close();")" == "0" ]]; then
   for s in initial_users.js initial_rbac.js initial_testdata.js; do as_vt npx knex --knexfile db-sample/knexfile.js seed:run --specific=$s 2>&1 | grep -E "Ran|RBAC" || true; done
 else
   echo "  already seeded"
 fi
+
+log "Vue+Express: apply the web-techtest overlay (custom app, per the template README)"
+as_vt bash "$ROOT/vue-express-deploy/web-techtest/apply.sh" "$VT_HOME/vue-antd-template" | sed 's/^/  /'
 
 log "Vue+Express: frontend production build (same-origin: empty VITE_API_URL -> relative /api calls)"
 cd "$VT_HOME/vue-antd-template/apps"

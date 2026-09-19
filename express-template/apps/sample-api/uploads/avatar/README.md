@@ -1,1 +1,0 @@
-For single avatar fle
