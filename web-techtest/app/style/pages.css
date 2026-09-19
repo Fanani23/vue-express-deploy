@@ -42,3 +42,5 @@
 .empty { display: grid; justify-items: center; gap: 0.25rem; padding: 1.5rem 1rem; border-radius: 12px; border: 1px dashed var(--p-border); color: var(--p-muted); font-size: 0.9rem; text-align: center; }
 .empty__icon { font-size: 1.6rem; opacity: 0.6; margin-bottom: 0.2rem; }
 .empty__hint { font-size: 0.78rem; }
+.pill { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; padding: 0.25rem 0.7rem; border-radius: 999px; font-weight: 500; }
+.pill .anticon { margin-right: 0.1rem; }
