@@ -3,11 +3,10 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">Cards</h1>
-        <p class="page__subtitle">The template's card grid, with real content: every TaskPulse task as a card, and a form that creates one.</p>
+        <p class="page__subtitle">The template's card grid, with real content: every TaskPulse task as a card on a three-column board. Drag a card to another column, or use its buttons.</p>
       </div>
       <div class="page__actions">
-        <a-tag class="pill" :color="loading ? 'processing' : 'success'"><AppstoreOutlined />{{ loading ? 'loading' : `${shown.length} of ${tasks.length}` }}</a-tag>
-        <a-segmented v-model:value="filter" :options="segments" size="small" />
+        <a-tag class="pill" :color="loading ? 'processing' : 'success'"><AppstoreOutlined />{{ loading ? 'loading' : `${tasks.length} tasks` }}</a-tag>
         <a-button size="small" @click="load" :loading="loading"><template #icon><ReloadOutlined /></template></a-button>
       </div>
     </header>
@@ -24,26 +23,30 @@
       </form>
     </div>
 
-    <div v-if="!loading && !shown.length" class="page__card" style="margin-top: 1rem"><div class="empty"><InboxOutlined class="empty__icon" /><span>{{ filter === 'all' ? 'No tasks yet' : `Nothing ${STATUS_LABEL[filter].toLowerCase()}` }}</span><span class="empty__hint">{{ filter === 'all' ? 'Create the first one above.' : 'Pick another filter or create a task.' }}</span></div></div>
 
-    <div class="cards">
-      <article v-for="t in shown" :key="t.id" class="card" :data-status="t.status">
-        <div class="card__top">
-          <span class="card__mark" :data-status="t.status"><CheckOutlined v-if="t.status === 'Done'" /><ClockCircleOutlined v-else-if="t.status === 'InProgress'" /><BorderOutlined v-else /></span>
-          <a-select :value="t.status" size="small" class="card__status" :options="statusOptions" :bordered="false" @change="(s) => setStatus(t, s)" />
+    <div class="board">
+      <section v-for="s in STATUSES" :key="s" class="column" :data-status="s" :class="{ 'column--over': dragOver === s }" @dragover.prevent="dragOver = s" @dragleave="dragOver = dragOver === s ? '' : dragOver" @drop.prevent="onDrop(s)">
+        <div class="column__head">
+          <span class="card__mark" :data-status="s"><CheckOutlined v-if="s === 'Done'" /><ClockCircleOutlined v-else-if="s === 'InProgress'" /><BorderOutlined v-else /></span>
+          <h3 class="column__title">{{ STATUS_LABEL[s] }}</h3>
+          <span class="sec__count">{{ byStatus[s].length }}</span>
         </div>
-        <h3 class="card__title" :class="{ 'card__title--done': t.status === 'Done' }" :title="t.title">{{ t.title }}</h3>
-        <p class="card__desc" :class="{ 'card__desc--none': !t.description }">{{ t.description || 'No details' }}</p>
-        <div class="card__meta">
-          <span><HistoryOutlined /> {{ timeAgo(t.updatedAt) }}</span>
-          <code>#{{ t.id.slice(0, 8) }}</code>
-        </div>
-        <div class="card__actions">
-          <a-tooltip :title="'Move to ' + STATUS_LABEL[NEXT_STATUS[t.status]]"><a-button size="small" type="text" class="card__btn" @click="advance(t)"><template #icon><ArrowRightOutlined /></template>{{ STATUS_LABEL[NEXT_STATUS[t.status]] }}</a-button></a-tooltip>
-          <a-tooltip title="Edit title"><a-button size="small" type="text" class="card__btn" @click="rename(t)"><template #icon><EditOutlined /></template></a-button></a-tooltip>
-          <a-popconfirm title="Delete this task?" ok-text="Delete" ok-type="danger" @confirm="remove(t)"><a-button size="small" type="text" danger class="card__btn"><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
-        </div>
-      </article>
+        <div v-if="!loading && !byStatus[s].length" class="empty column__empty"><InboxOutlined class="empty__icon" /><span>Nothing {{ STATUS_LABEL[s].toLowerCase() }}</span><span class="empty__hint">Drop a card here.</span></div>
+        <article v-for="t in byStatus[s]" :key="t.id" class="card" :data-status="t.status" draggable="true" :class="{ 'card--dragging': dragging === t.id }" @dragstart="onDragStart(t)" @dragend="dragging = ''; dragOver = ''">
+          <h3 class="card__title" :class="{ 'card__title--done': t.status === 'Done' }" :title="t.title">{{ t.title }}</h3>
+          <p class="card__desc" :class="{ 'card__desc--none': !t.description }">{{ t.description || 'No details' }}</p>
+          <div class="card__meta">
+            <span><HistoryOutlined /> {{ timeAgo(t.updatedAt) }}</span>
+            <code>#{{ t.id.slice(0, 8) }}</code>
+          </div>
+          <div class="card__actions">
+            <a-tooltip v-if="t.status !== 'Todo'" title="Move left"><a-button size="small" type="text" class="card__btn" @click="setStatus(t, PREV_STATUS[t.status])"><template #icon><ArrowLeftOutlined /></template></a-button></a-tooltip>
+            <a-tooltip title="Edit title"><a-button size="small" type="text" class="card__btn" @click="rename(t)"><template #icon><EditOutlined /></template></a-button></a-tooltip>
+            <a-popconfirm title="Delete this task?" ok-text="Delete" ok-type="danger" @confirm="remove(t)"><a-button size="small" type="text" danger class="card__btn"><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
+            <a-tooltip v-if="t.status !== 'Done'" :title="'Move to ' + STATUS_LABEL[NEXT_STATUS[t.status]]"><a-button size="small" type="text" class="card__btn card__btn--next" @click="setStatus(t, NEXT_STATUS[t.status])">{{ STATUS_LABEL[NEXT_STATUS[t.status]] }}<template #icon><ArrowRightOutlined /></template></a-button></a-tooltip>
+          </div>
+        </article>
+      </section>
     </div>
     <transition name="pop"><a-alert v-if="error" class="dash__alert" type="error" show-icon closable :message="error" @close="error = ''" /></transition>
   </div>
@@ -51,7 +54,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { ArrowRightOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined, PlusOutlined, AlignLeftOutlined, InboxOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HistoryOutlined } from '@ant-design/icons-vue'
+import { ArrowRightOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined, PlusOutlined, AlignLeftOutlined, InboxOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HistoryOutlined } from '@ant-design/icons-vue'
 import { Modal, Input } from 'ant-design-vue'
 import { h } from 'vue'
 import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR, NEXT_STATUS } from '../../taskpulse.js'
@@ -65,6 +68,16 @@ const filter = ref('all')
 const segments = [{ label: 'All', value: 'all' }, ...STATUSES.map((s) => ({ label: STATUS_LABEL[s], value: s }))]
 const draft = reactive({ title: '', description: '' })
 
+const PREV_STATUS = { InProgress: 'Todo', Done: 'InProgress' }
+const byStatus = computed(() => Object.fromEntries(STATUSES.map((s) => [s, tasks.value.filter((t) => t.status === s)])))
+const dragging = ref('')
+const dragOver = ref('')
+const onDragStart = (t) => { dragging.value = t.id }
+const onDrop = async (status) => {
+  const t = tasks.value.find((x) => x.id === dragging.value)
+  dragging.value = ''; dragOver.value = ''
+  if (t && t.status !== status) await setStatus(t, status)
+}
 const shown = computed(() => (filter.value === 'all' ? tasks.value : tasks.value.filter((t) => t.status === filter.value)))
 
 const fail = (e) => { error.value = e?.message || String(e) }
@@ -132,4 +145,17 @@ onMounted(load)
 .card__actions .card__btn:first-child { margin-right: auto; }
 .card__btn { color: var(--p-muted); }
 .card__btn:hover { color: var(--p-accent); }
+</style>
+<style scoped>
+.board { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 1rem; align-items: start; }
+@media (max-width: 1000px) { .board { grid-template-columns: 1fr; } }
+.column { display: grid; gap: 0.75rem; padding: 0.75rem; border-radius: 16px; background: color-mix(in srgb, var(--p-border) 35%, transparent); border: 2px solid transparent; min-height: 12rem; transition: border-color 0.15s, background 0.15s; }
+.column--over { border-color: var(--p-accent); background: color-mix(in srgb, var(--p-accent) 8%, transparent); }
+.column__head { display: flex; align-items: center; gap: 0.6rem; padding: 0.25rem 0.25rem 0; }
+.column__title { margin: 0; font-size: 0.95rem; font-weight: 600; flex: 1; }
+.column__empty { background: var(--p-card); }
+.card { cursor: grab; }
+.card--dragging { opacity: 0.4; }
+.card__btn--next { margin-left: auto; }
+.card__actions .card__btn:first-child { margin-right: 0; }
 </style>
