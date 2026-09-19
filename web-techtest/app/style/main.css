@@ -1,0 +1,22 @@
+:root {
+  --app-bg: #f4f6fa;
+  --app-surface: #ffffff;
+  --app-text: #1a1d21;
+}
+:root[data-theme="dark"] {
+  --app-bg: #0f1216;
+  --app-surface: #171b21;
+  --app-text: #e6e9ee;
+}
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+:root[data-theme="dark"] .ant-layout-header,
+:root[data-theme="dark"] .ant-layout-content {
+  background: var(--app-surface) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
+}

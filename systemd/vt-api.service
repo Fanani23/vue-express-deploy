@@ -1,0 +1,21 @@
+[Unit]
+Description=Vue+Express stack - express-template sample-api (:3000)
+After=network.target vt-db.service
+Requires=vt-db.service
+
+[Service]
+Type=simple
+User=ura
+WorkingDirectory=/home/ura/work/express-template/apps/sample-api
+Environment=PATH=/home/ura/.nvm/versions/node/v24.13.0/bin:/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=development
+Environment=npm_package_name=@express-template/sample-api
+Environment=npm_package_version=0.0.6
+EnvironmentFile=-/etc/vt/api.env
+ExecStartPre=/bin/sleep 1
+ExecStart=/home/ura/.nvm/versions/node/v24.13.0/bin/node src/index.js
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,297 @@
+<template>
+  <div class="auth" :class="{ 'auth--signup': isSignup }">
+    <aside class="auth__brand">
+      <div class="brand__logo">V</div>
+      <transition name="brand-swap" mode="out-in">
+        <div v-if="!isSignup" key="in" class="brand__copy">
+          <h2 class="brand__title">{{ appTitle }}</h2>
+          <p class="brand__tagline">Vue 3 · Express · two-step sign-in</p>
+          <ul class="brand__points">
+            <li>Password checked server-side with scrypt</li>
+            <li>One-time code before any token is issued</li>
+            <li>Short-lived JWT + revocable refresh token</li>
+          </ul>
+          <button type="button" class="brand__cta" data-cy="to-signup" @click="go('signup')">
+            New here? Create an account <span aria-hidden="true">→</span>
+          </button>
+        </div>
+        <div v-else key="up" class="brand__copy">
+          <h2 class="brand__title">Join {{ appTitle }}</h2>
+          <p class="brand__tagline">Create your account</p>
+          <ul class="brand__points">
+            <li>Password stored as a salted scrypt hash</li>
+            <li>Email address verified with a one-time code</li>
+            <li>You are signed in as soon as it is confirmed</li>
+          </ul>
+          <button type="button" class="brand__cta" data-cy="to-signin" @click="go('signin')">
+            <span aria-hidden="true">←</span> Already have an account? Sign in
+          </button>
+        </div>
+      </transition>
+    </aside>
+
+    <main ref="panel" class="auth__panel">
+      <transition :name="'slide-' + direction" mode="out-in" @after-enter="focusFirstField">
+        <a-form v-if="view === 'login'" key="login" layout="vertical" class="auth__form" @finish="login">
+          <h1 class="auth__title">Welcome back</h1>
+          <p class="auth__subtitle">Sign in to continue to your dashboard.</p>
+
+          <a-form-item :label="otpEmailMode ? 'Email' : 'Username or email'">
+            <a-input data-cy="username" v-model:value="email" size="large" :type="otpEmailMode ? 'email' : 'text'" autocomplete="username" placeholder="you@example.com">
+              <template #prefix><UserOutlined class="auth__icon" /></template>
+            </a-input>
+          </a-form-item>
+
+          <a-form-item label="Password">
+            <a-input-password data-cy="password" v-model:value="password" size="large" autocomplete="current-password" placeholder="••••••••">
+              <template #prefix><LockOutlined class="auth__icon" /></template>
+            </a-input-password>
+          </a-form-item>
+
+          <div class="auth__row auth__row--end">
+            <a href="/signup" @click.prevent="go('signup')">Create an account</a>
+          </div>
+
+          <a-button data-cy="login" type="primary" size="large" block html-type="submit" :loading="store.loading">
+            <template #icon><MailOutlined /></template>
+            Sign in with email
+          </a-button>
+
+          <template v-if="providers.google || providers.github">
+            <a-divider plain class="auth__divider">or</a-divider>
+            <a-button v-if="providers.google" size="large" block class="auth__social" @click="googleLogin">
+              <template #icon><GoogleOutlined /></template>
+              Continue with Google
+            </a-button>
+            <a-button v-if="providers.github" size="large" block class="auth__social" @click="oauthLogin">
+              <template #icon><GithubOutlined /></template>
+              Continue with GitHub
+            </a-button>
+          </template>
+
+          <p class="auth__hint" v-if="otpEmailMode">After your password, a 6-digit code is emailed to you.</p>
+          <p class="auth__hint" v-else-if="otpTestMode">Test mode: the one-time code is <code>111111</code>.</p>
+          <p class="auth__hint" v-else>After your password, enter the code from your authenticator app.</p>
+        </a-form>
+
+        <a-form v-else-if="view === 'otp'" key="otp" layout="vertical" class="auth__form" @finish="otpLogin">
+          <a-button type="text" class="auth__back" @click="setToLogin">
+            <template #icon><ArrowLeftOutlined /></template>
+            Back
+          </a-button>
+          <h1 class="auth__title">Two-step verification</h1>
+          <p class="auth__subtitle">
+            <template v-if="otpTestMode">Test mode is on — the code is 111111.</template>
+            <template v-else-if="otpEmailMode">We emailed a 6-digit code to <strong>{{ email }}</strong>. It expires in 5 minutes.</template>
+            <template v-else>Open your authenticator app and enter the current 6-digit code. Signing in as <strong>{{ email }}</strong>.</template>
+          </p>
+
+          <a-form-item label="One-time code">
+            <a-input
+              ref="otpInput"
+              data-cy="pin"
+              v-model:value="otp"
+              class="auth__otp"
+              size="large"
+              :maxlength="6"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="one-time-code"
+              placeholder="000000"
+            >
+              <template #prefix><SafetyOutlined class="auth__icon" /></template>
+            </a-input>
+          </a-form-item>
+
+          <a-button data-cy="otp" type="primary" size="large" block html-type="submit" :loading="store.loading" :disabled="otp.length !== 6">
+            Verify and sign in
+          </a-button>
+
+          <p class="auth__hint">{{ otpEmailMode ? "Didn't get it? Go back and sign in again for a new code." : "Codes rotate every 30 seconds." }} Three wrong attempts return you to sign-in.</p>
+        </a-form>
+
+        <SignUpForm v-else key="signup" @signin="go('signin')" />
+      </transition>
+
+      <transition name="pop">
+        <a-alert
+          v-if="errorMessage && view !== 'signup'"
+          class="auth__alert"
+          type="error"
+          show-icon
+          closable
+          :message="errorMessage"
+          @close="errorMessage = ''"
+        />
+      </transition>
+    </main>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
+import { useMainStore } from '../store.js'
+import { useRoute, useRouter } from 'vue-router'
+import { UserOutlined, MailOutlined, LockOutlined, SafetyOutlined, GithubOutlined, GoogleOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
+
+import parseJwt from '@es-labs/jslib/web/parse-jwt'
+
+import { http } from '../../common/plugins/fetch.js'
+import SignUpForm from '../components/SignUpForm.vue'
+
+const { VITE_REFRESH_URL, VITE_APP_TITLE, VITE_OTP_MODE, VITE_OAUTH_CLIENT_ID, MODE } = import.meta.env
+const appTitle = VITE_APP_TITLE || 'My App'
+const providers = ref({ github: false, google: false, githubClientId: '', otp: VITE_OTP_MODE || '' })
+
+const googleLogin = () => {
+  window.location.assign(`${import.meta.env.VITE_API_URL || ''}/api/google/login`)
+}
+const otpTestMode = computed(() => providers.value.otp === 'TEST')
+const otpEmailMode = computed(() => providers.value.otp === 'EMAIL')
+const store = useMainStore()
+const route = useRoute()
+const email = ref('')
+const password = ref('')
+const errorMessage = ref('')
+const mode = ref('login')
+const otp = ref('')
+const otpInput = ref(null)
+
+const forced = ref(false)
+let otpCount = 0
+let otpId = ''
+
+const setToLogin = () => {
+  mode.value = 'login'
+  otp.value = ''
+  otpCount = 0
+}
+
+watch(mode, (m) => {
+  if (m === 'otp') nextTick(() => otpInput.value?.focus?.())
+})
+
+onUnmounted(() => console.log('signIn unmounted'))
+
+onMounted(async () => {
+  console.log('signIn mounted!', route.hash)
+  setToLogin()
+  errorMessage.value = ''
+  store.loading = false
+  try {
+    const { data } = await http.get('/api/auth/providers')
+    providers.value = { ...providers.value, ...data }
+  } catch (e) {
+    console.log('providers unavailable, using env defaults', e?.toString())
+  }
+  if (otpTestMode.value) otp.value = '111111'
+})
+
+onBeforeUnmount(() => {
+})
+
+const _setUser = async (data, decoded) => {
+  await store.doLogin(decoded)
+}
+
+const login = async () => {
+  console.log('login clicked', forced.value)
+  if (forced.value) {
+    _setUser(null, {
+      id: 1,
+      access_token: '',
+      refresh_token: ''
+    })
+    return
+  }
+  if (store.value) return
+  if (!email.value.trim() || !password.value) { errorMessage.value = 'Enter your email and password'; return }
+  store.loading = true
+  errorMessage.value = ''
+  try {
+    const { data } = await http.post('/api/auth/login', {
+      email: email.value,
+      password: password.value
+    })
+    if (data.otp) {
+      mode.value = 'otp'
+      otpId = data.otp
+      otpCount = 0
+    } else {
+      const decoded = parseJwt(data.access_token)
+      http.setTokens({ access: data.access_token, refresh: data.refresh_token })
+      http.setOptions({ refreshUrl: VITE_REFRESH_URL })
+      _setUser(data, decoded)
+    }
+  } catch (e) {
+    console.log('login error', e.toString(), e)
+    errorMessage.value = e?.data?.message || e.toString()
+  }
+  store.loading = false
+}
+
+const otpLogin = async () => {
+  if (store.loading) return
+  store.loading = true
+  errorMessage.value = ''
+  try {
+    http.setOptions({ refreshUrl: VITE_REFRESH_URL })
+    const { data } = await http.post('/api/auth/otp', { id: otpId, pin: otp.value })
+    const decoded = parseJwt(data.access_token)
+    http.setTokens({ access: data.access_token, refresh: data.refresh_token })
+    http.setOptions({ refreshUrl: VITE_REFRESH_URL })
+    _setUser(data, decoded)
+  } catch (e) {
+    if (e?.data?.message === 'Token Expired Error') {
+      errorMessage.value = 'OTP Expired'
+      setToLogin()
+    } else if (otpCount < 3) {
+      otpCount++
+      errorMessage.value = 'OTP Error'
+    } else {
+      errorMessage.value = 'OTP Tries Exceeded'
+      setToLogin()
+    }
+  }
+  store.loading = false
+}
+
+const oauthLogin = () => {
+  if (MODE === 'mocked') {
+    window.location.assign('/callback#mocked')
+  } else {
+    const OAUTH_CLIENT_ID = providers.value.githubClientId || VITE_OAUTH_CLIENT_ID
+    if (!OAUTH_CLIENT_ID) {
+      errorMessage.value = 'GitHub sign-in is not configured on the server.'
+      return
+    }
+    const OAUTH_URL = 'https://github.com/login/oauth/authorize?scope=user:email&client_id'
+    http.setOptions({ refreshUrl: VITE_REFRESH_URL })
+    window.location.replace(`${OAUTH_URL}=${OAUTH_CLIENT_ID}`)
+  }
+}
+
+const router = useRouter()
+const isSignup = computed(() => route.name === 'SignUp')
+const view = computed(() => (isSignup.value ? 'signup' : mode.value))
+
+const DEPTH = { login: 0, otp: 1, signup: 1 }
+const direction = ref('left')
+watch(view, (to, from) => {
+  direction.value = DEPTH[to] >= DEPTH[from] ? 'left' : 'right'
+  errorMessage.value = ''
+})
+
+const go = (target) => {
+  if (target === 'signin') setToLogin()
+  router.push(target === 'signup' ? '/signup' : '/signin')
+}
+
+const panel = ref(null)
+const focusFirstField = () => {
+  if (view.value === 'otp') return
+  panel.value?.querySelector('.auth__form input')?.focus()
+}
+</script>
+
+<style src="../style/auth.css"></style>

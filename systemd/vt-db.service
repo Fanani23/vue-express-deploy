@@ -1,0 +1,15 @@
+[Unit]
+Description=VT assignment - PGlite socket DB for express-template (127.0.0.1:5432)
+After=network.target
+
+[Service]
+Type=simple
+User=ura
+WorkingDirectory=/home/ura/work/express-template/scripts/dbdeploy
+Environment=PATH=/home/ura/.nvm/versions/node/v24.13.0/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ura/.nvm/versions/node/v24.13.0/bin/node serve-db.js
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

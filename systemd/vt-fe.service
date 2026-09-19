@@ -1,0 +1,15 @@
+[Unit]
+Description=VT assignment - vue-antd-template Vite dev server (127.0.0.1:8080)
+After=network.target
+
+[Service]
+Type=simple
+User=ura
+WorkingDirectory=/home/ura/work/vue-antd-template/apps
+Environment=PATH=/home/ura/.nvm/versions/node/v24.13.0/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ura/.nvm/versions/node/v24.13.0/bin/node /home/ura/work/vue-antd-template/node_modules/.bin/vite --config web-techtest/vite.config.js --mode development
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
