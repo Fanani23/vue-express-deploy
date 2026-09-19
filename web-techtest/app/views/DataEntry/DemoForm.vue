@@ -59,14 +59,14 @@
         <pre class="code" style="margin-top: 0.75rem">{{ submitResult || JSON.stringify({ ...toRaw(formState), date1: appStore.form.date1, delivery: appStore.form.delivery }, null, 2) }}</pre>
       </div>
 
-      <div class="page__card">
+      <div class="page__card card--wide">
         <div class="sec">
           <span class="sec__icon"><SwapOutlined /></span>
           <h3 class="sec__title">Transfer list</h3>
           <span class="sec__count">{{ targetKeys.length }} / {{ mockData.length }} chosen</span>
           <a-button size="small" @click="getMock"><template #icon><ReloadOutlined /></template>reshuffle</a-button>
         </div>
-        <a-transfer :data-source="mockData" show-search :list-style="{ width: '100%', height: '300px' }" :operations="['to right', 'to left']" :target-keys="targetKeys" :render="(item) => `${item.title} — ${item.description}`" @change="(keys) => (targetKeys = keys)" class="transfer">
+        <a-transfer :data-source="mockData" show-search :list-style="{ height: '300px' }" :operations="['to right', 'to left']" :target-keys="targetKeys" :render="(item) => `${item.title} — ${item.description}`" @change="(keys) => (targetKeys = keys)" class="transfer">
           <template #notFoundContent><div class="empty"><InboxOutlined class="empty__icon" /><span>Nothing here</span></div></template>
         </a-transfer>
       </div>
@@ -160,9 +160,14 @@ const onWsMsg = () => { if (wsMsg.value && ws.isOpen.value) { ws.echo(wsMsg.valu
 </script>
 
 <style scoped>
-.form-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); align-items: start; }
+.form-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@media (max-width: 1100px) { .form-grid { grid-template-columns: 1fr; } }
+.form-grid > .page__card { min-width: 0; }
+.form-grid > .card--wide { grid-column: 1 / -1; }
 .two { display: grid; gap: 0 1rem; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .in-icon { color: var(--p-muted); }
 .ws-send { display: flex; gap: 0.5rem; }
-.transfer :deep(.ant-transfer-list) { flex: 1; }
+.transfer { display: flex; align-items: stretch; }
+.transfer :deep(.ant-transfer-list) { flex: 1 1 0; min-width: 0; width: auto !important; }
+.transfer :deep(.ant-transfer-operation) { flex: none; }
 </style>
