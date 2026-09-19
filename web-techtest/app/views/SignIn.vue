@@ -1,6 +1,12 @@
 <template>
   <div class="auth" :class="{ 'auth--signup': isSignup }">
     <aside class="auth__brand">
+      <svg class="brand__edge" viewBox="0 0 100 1000" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M100 0 C 42 190, 96 400, 40 590 C 8 750, 52 900, 100 1000 Z" />
+      </svg>
+      <svg class="brand__edge brand__edge--bottom" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 100 L0 62 C 180 28, 380 92, 580 52 C 760 16, 900 48, 1000 70 L1000 100 Z" />
+      </svg>
       <div class="brand__logo">V</div>
       <transition name="brand-swap" mode="out-in">
         <div v-if="!isSignup" key="in" class="brand__copy">
