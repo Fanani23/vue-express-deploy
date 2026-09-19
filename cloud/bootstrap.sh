@@ -69,6 +69,7 @@ as_vt bash "$ROOT/vue-express-deploy/patches/apply.sh" "$VT_HOME/express-templat
 ( cd "$VT_HOME/express-template" && as_vt npm i --no-audit --no-fund --loglevel=error )
 
 log "Vue+Express: database (PGlite) - api_role, migrations, seeds in dependency order"
+systemctl stop vt-api vt-db 2>/dev/null || true
 cd "$VT_HOME/express-template/scripts/dbdeploy"
 as_vt node --input-type=module -e "
 import { PGlite } from '@electric-sql/pglite';
@@ -81,6 +82,11 @@ if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/
 else
   echo "  already seeded"
 fi
+install -o "$VT_USER" -m 0644 "$ROOT/vue-express-deploy/seeds/techtest_data.js" db-sample/seeds/techtest_data.js
+if ! out=$(as_vt npx knex --knexfile db-sample/knexfile.js seed:run --specific=techtest_data.js 2>&1); then
+  echo "$out" | tail -20 >&2; echo "techtest_data.js seed failed" >&2; exit 1
+fi
+echo "$out" | grep "^seed:" | sed 's/^/  /'
 
 log "Vue+Express: apply the web-techtest overlay (custom app, per the template README)"
 as_vt bash "$ROOT/vue-express-deploy/web-techtest/apply.sh" "$VT_HOME/vue-antd-template" | sed 's/^/  /'
@@ -168,9 +174,9 @@ server {
     location = /auth {
         proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Host \$host;
+        proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto \$scheme;
     }
     location /api/ {
         proxy_pass         http://127.0.0.1:3000;

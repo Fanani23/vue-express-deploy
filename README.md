@@ -16,6 +16,7 @@ commits validated in the setup notes:
 |---|---|
 | `patches/` + `patches/apply.sh` | backend fixes/extensions applied to a checkout of `express-template`: keyv string keys, awaited OTP verify (security fix), EMAIL one-time codes, sign-up, GitHub sign-in with auto-provisioning, Google sign-in, `/api/auth/providers`, OAuth secrets from the environment. Idempotent (marker-based). |
 | `web-techtest/` + `web-techtest/apply.sh` | the custom frontend app, created as a copy of the template's `web-sample` with `web-techtest/app/` laid over it — the customisation route the template README prescribes, so `web-sample` is never edited. Registers `npm run techtest` / `techtest:build` and the missing `/signup` route. |
+| `seeds/techtest_data.js` | knex seed for the template's PGlite database, run after the template's own three seeds: three accounts (`admin@techtest.dev`, `demo@techtest.dev`, `viewer@techtest.dev`, password `Techtest123!`) with `Admin` / `Viewer` roles and permission grants, 20 students, 3 subjects, an award, enrolments with grades; also advances the `users`/`roles`/`student` sequences the template's explicit-id seeds leave behind (without that the first sign-up collides on `id = 1`). Idempotent. |
 | `systemd/` | `vt-db` (PGlite server), `vt-api` (Express), `vt-fe` (Vite) units for running the stack as services on a dev box |
 | `cloud/bootstrap.sh` | one-shot install of **both** technical-test parts on a fresh Ubuntu VM behind nginx — expects to live in `<submission>/code/vue-express-deploy/cloud` next to `code/taskpulse` |
 
@@ -42,6 +43,8 @@ git clone https://github.com/es-labs/express-template && git -C express-template
 git clone https://github.com/es-labs/vue-antd-template && git -C vue-antd-template checkout 99a34fa
 bash patches/apply.sh express-template            # then: cd express-template && npm i
 bash web-techtest/apply.sh vue-antd-template      # then: cd vue-antd-template/apps && npm run techtest
+cp seeds/techtest_data.js express-template/scripts/dbdeploy/db-sample/seeds/
+(cd express-template/scripts/dbdeploy && npx knex --knexfile db-sample/knexfile.js seed:run --specific=techtest_data.js)
 ```
 
 ## Why the template needed fixing
