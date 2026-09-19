@@ -1,24 +1,38 @@
 # vue-express-deploy
 
-Deployment kit for the es-labs **Vue + Express** templates (part 1 of the technical test): the fixes and
-extensions the templates need, the custom frontend app, and the scripts that put the stack on a Linux host
-behind nginx.
+Part 1 of the technical test: the es-labs **Vue + Express** templates, fixed and extended, with the custom
+frontend app and the scripts that put the stack on a Linux host behind nginx.
 
-This repo contains **no code from es-labs**. Both templates are cloned at deploy time and pinned to the
-commits validated in the setup notes:
+Both templates are checked in here as code, taken from the commits validated in the setup notes and modified
+in place:
 
-| Template | Commit |
-|---|---|
-| `es-labs/express-template` | `db883cd` |
-| `es-labs/vue-antd-template` | `99a34fa` |
+| Folder | Upstream | What changed |
+|---|---|---|
+| `express-template/` | `es-labs/express-template` @ `db883cd` (MIT) | see **Backend changes** |
+| `vue-antd-template/` | `es-labs/vue-antd-template` @ `99a34fa` | `apps/web-techtest/`, the custom app — a copy of `web-sample` with the sign-in / sign-up views, theme and styles replaced, registered in `apps/package.json`; `web-sample` itself is untouched, the customisation route their README prescribes |
+
+Upstream housekeeping (CI workflows, release tooling, changelogs, the unused `sample-mcp` app) is not carried.
 
 | Path | What it does |
 |---|---|
-| `patches/` + `patches/apply.sh` | backend fixes/extensions applied to a checkout of `express-template`: keyv string keys, awaited OTP verify (security fix), EMAIL one-time codes, sign-up, GitHub sign-in with auto-provisioning, Google sign-in, `/api/auth/providers`, OAuth secrets from the environment, fixed per-account pin (`users.otp_pin`), every new account (sign-up, GitHub, Google) created as `Viewer` — comma column and RBAC rows, role and permissions created on first use. Idempotent (marker-based). |
-| `web-techtest/` + `web-techtest/apply.sh` | the custom frontend app, created as a copy of the template's `web-sample` with `web-techtest/app/` laid over it — the customisation route the template README prescribes, so `web-sample` is never edited. Registers `npm run techtest` / `techtest:build` and the missing `/signup` route. |
-| `migrations/` | kit migrations copied next to the template's before `migrate:latest`: `users.otp_pin` — when set on an account, that pin is its second factor instead of an emailed / authenticator code (used for the demo accounts on the VPS); accounts without it, including every sign-up, get the real code |
+| `express-template/` | backend: Express API (`apps/sample-api`), shared auth/db code (`common/`), PGlite migrations and seeds (`scripts/dbdeploy`) |
+| `vue-antd-template/` | frontend: Vite + Vue 3 + Ant Design workspace; the deployed app is `apps/web-techtest` |
 | `systemd/` | `vt-db` (PGlite server), `vt-api` (Express), `vt-fe` (Vite) units for running the stack as services on a dev box |
 | `cloud/bootstrap.sh` | one-shot install of **both** technical-test parts on a fresh Ubuntu VM behind nginx — expects to live in `<submission>/code/vue-express-deploy/cloud` next to `code/taskpulse` |
+
+## Backend changes
+
+All in `express-template/`, each a small, self-contained edit:
+
+| Where | Change |
+|---|---|
+| `common/compiled/node/auth/keyv.js` | `keyv@5` requires string keys: the refresh-token store is keyed by `String(id)`; EMAIL one-time codes stored with a TTL and an attempt limit |
+| `.../controller/auth/own.js` | **security fix** — `otplib` v13 made `verify()` async and the template never awaited it, so any authenticator code was accepted; EMAIL one-time codes; `POST /api/auth/signup`; fixed per-account second factor (`users.otp_pin`) |
+| `common/compiled/node/services/mailer.js` | nodemailer transport from `SMTP_*`; console transport (codes to the log) when unset |
+| `.../controller/auth/oauth.js`, `google.js` | GitHub sign-in links by verified email or provisions; Continue with Google (OIDC); OAuth secrets from the environment |
+| `common/compiled/node/auth/knex.js` | `createUser`: every new account (sign-up, GitHub, Google) is created as `Viewer` — comma column and RBAC rows, role and permissions created on first use; serial sequences synced after the explicit-id seeds |
+| `apps/sample-api/src/routes/auth.js`, `routes/index.js` | `/signup`, `/providers`, `/auth` (GitHub redirect alias), Google routes |
+| `scripts/dbdeploy/db-sample/migrations/20260919000000_users_otp_pin.js` | `users.otp_pin`: when set on an account, that pin is its second factor instead of an emailed / authenticator code; accounts without it, including every sign-up, get the real code |
 
 ## Configuration
 
@@ -36,14 +50,20 @@ is committed.
 Sign-in buttons for GitHub / Google are shown only when the matching pair is configured
 (`GET /api/auth/providers`).
 
-## Apply to a checkout
+## Run locally
 
 ```bash
-git clone https://github.com/es-labs/express-template && git -C express-template checkout db883cd
-git clone https://github.com/es-labs/vue-antd-template && git -C vue-antd-template checkout 99a34fa
-bash patches/apply.sh express-template            # then: cd express-template && npm i
-bash web-techtest/apply.sh vue-antd-template      # then: cd vue-antd-template/apps && npm run techtest
+cd express-template && npm i && (cd scripts/dbdeploy && npm i)
+cd scripts/dbdeploy && npx knex --knexfile db-sample/knexfile.js migrate:latest
+for s in initial_users.js initial_rbac.js initial_testdata.js; do npx knex --knexfile db-sample/knexfile.js seed:run --specific=$s; done
+node serve-db.js &                                  # PGlite on 127.0.0.1:5432
+(cd ../../apps/sample-api && npm run dev) &          # API on :3000
+
+cd vue-antd-template && npm i && cd apps && npm i && npm run techtest   # Vite dev server
 ```
+
+`docs/vue-express-notes.md` in the submission has the full walkthrough, including the `api_role` the
+migrations assume and the seed order.
 
 ## Why the template needed fixing
 
