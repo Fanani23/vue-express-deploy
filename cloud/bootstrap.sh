@@ -82,11 +82,6 @@ if [[ "$(as_vt node --input-type=module -e "import {PGlite} from '@electric-sql/
 else
   echo "  already seeded"
 fi
-install -o "$VT_USER" -m 0644 "$ROOT/vue-express-deploy/seeds/techtest_data.js" db-sample/seeds/techtest_data.js
-if ! out=$(as_vt npx knex --knexfile db-sample/knexfile.js seed:run --specific=techtest_data.js 2>&1); then
-  echo "$out" | tail -20 >&2; echo "techtest_data.js seed failed" >&2; exit 1
-fi
-echo "$out" | grep "^seed:" | sed 's/^/  /'
 
 log "Vue+Express: apply the web-techtest overlay (custom app, per the template README)"
 as_vt bash "$ROOT/vue-express-deploy/web-techtest/apply.sh" "$VT_HOME/vue-antd-template" | sed 's/^/  /'
