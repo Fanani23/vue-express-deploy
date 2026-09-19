@@ -93,11 +93,33 @@
             <a-segmented v-model:value="claimView" :options="['Explained', 'Raw JSON']" size="small" />
             <a-tooltip title="Copy claims"><a-button size="small" @click="copy(claims, 'Claims')"><template #icon><CopyOutlined /></template></a-button></a-tooltip>
           </div>
-          <div class="token">
-            <code class="token__value">{{ maskedToken }}</code>
+          <div class="jwt">
+            <div class="jwt__parts">
+              <span class="jwt__part jwt__part--h" title="header">{{ parts.header }}</span><span class="jwt__dot">.</span><span class="jwt__part jwt__part--p" title="payload">{{ parts.payload }}</span><span class="jwt__dot">.</span><span class="jwt__part jwt__part--s" title="signature">{{ parts.signature }}</span>
+            </div>
             <a-tooltip :title="showToken ? 'Hide token' : 'Show token'"><a-button size="small" @click="showToken = !showToken"><template #icon><EyeInvisibleOutlined v-if="showToken" /><EyeOutlined v-else /></template></a-button></a-tooltip>
           </div>
-          <a-table v-if="claimView === 'Explained'" :data-source="explained" :columns="claimColumns" :pagination="false" size="small" row-key="claim" class="claims" />
+          <div class="jwt__legend">
+            <span><i class="jwt__swatch jwt__swatch--h" />header · {{ header.alg || '—' }} {{ header.typ || '' }}</span>
+            <span><i class="jwt__swatch jwt__swatch--p" />payload · {{ explained.length }} claims</span>
+            <span><i class="jwt__swatch jwt__swatch--s" />signature · HMAC, checked by the API only</span>
+            <span class="page__muted">{{ tokenLength }} chars</span>
+          </div>
+          <div v-if="claimView === 'Explained'" class="claims">
+            <div v-for="c in explained" :key="c.claim" class="claim" :class="{ 'claim--empty': c.empty }">
+              <span class="claim__icon"><component :is="c.icon" /></span>
+              <div class="claim__body">
+                <div class="claim__head"><code class="claim__name">{{ c.claim }}</code><span v-if="c.badge" class="claim__badge" :data-tone="c.tone">{{ c.badge }}</span></div>
+                <div class="claim__value">
+                  <template v-if="c.empty"><MinusOutlined /> not set</template>
+                  <template v-else-if="c.tags"><a-tag v-for="t in c.tags" :key="t" color="blue" class="claim__tag">{{ t }}</a-tag></template>
+                  <template v-else-if="c.pairs"><span v-for="p in c.pairs" :key="p.k" class="claim__pair"><span class="page__muted">{{ p.k }}</span> {{ p.v }}</span></template>
+                  <template v-else>{{ c.value }}</template>
+                </div>
+                <div class="claim__meaning">{{ c.meaning }}</div>
+              </div>
+            </div>
+          </div>
           <pre v-else class="code" data-cy="claims">{{ claims }}</pre>
         </div>
       </a-col>
@@ -108,7 +130,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
-import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons-vue'
+import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined, BankOutlined, UserOutlined, TeamOutlined, SafetyOutlined, CrownOutlined, TagOutlined, FileTextOutlined, MinusOutlined } from '@ant-design/icons-vue'
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
 import { useMainStore } from '../store.js'
 import { http } from '../../common/plugins/fetch.js'
@@ -158,17 +180,23 @@ const meaning = {
   user_meta: 'selected user fields copied into the token (AUTH_USER_FIELDS_JWT_PAYLOAD)',
   nickname: 'set on this page; lives in the store only',
 }
-const explained = computed(() => Object.entries(user.value).map(([claim, value]) => ({ claim, value: typeof value === 'object' ? JSON.stringify(value) : /^(iat|exp)$/.test(claim) ? `${value} → ${fmt(value)}` : String(value ?? ''), meaning: meaning[claim] || '' })))
-const claimColumns = [
-  { title: 'Claim', dataIndex: 'claim', key: 'claim', width: 120 },
-  { title: 'Value', dataIndex: 'value', key: 'value', ellipsis: true },
-  { title: 'Meaning', dataIndex: 'meaning', key: 'meaning' },
-]
-const maskedToken = computed(() => {
-  const t = http.getTokens().access || ''
-  if (!t) return 'no access token in memory'
-  return showToken.value ? t : `${t.slice(0, 12)}…${t.slice(-10)}  (${t.length} chars, HS256 JWT)`
+const CLAIM_ICON = { iss: BankOutlined, sub: UserOutlined, aud: TeamOutlined, scope: SafetyOutlined, roles: CrownOutlined, iat: LoginOutlined, exp: FieldTimeOutlined, user_meta: IdcardOutlined, nickname: TagOutlined }
+const explained = computed(() => Object.entries(user.value).map(([claim, value]) => {
+  const c = { claim, meaning: meaning[claim] || '', icon: CLAIM_ICON[claim] || FileTextOutlined, empty: value === '' || value == null || (Array.isArray(value) && !value.length) }
+  if (Array.isArray(value)) c.tags = value.map(String)
+  else if (value && typeof value === 'object') c.pairs = Object.entries(value).map(([k, v]) => ({ k, v: String(v) }))
+  else if (claim === 'iat' || claim === 'exp') { c.value = fmt(value); c.badge = claim === 'exp' ? remainingShort.value : String(value); c.tone = claim === 'exp' ? (secondsLeft.value <= 0 ? 'bad' : secondsLeft.value < 300 ? 'warn' : 'ok') : 'muted' }
+  else c.value = String(value)
+  return c
+}))
+const rawToken = computed(() => http.getTokens().access || '')
+const tokenLength = computed(() => rawToken.value.length)
+const parts = computed(() => {
+  const [h = '', p = '', s = ''] = rawToken.value.split('.')
+  const cut = (x) => (showToken.value || x.length <= 14 ? x : `${x.slice(0, 8)}…${x.slice(-4)}`)
+  return { header: cut(h), payload: cut(p), signature: cut(s) }
 })
+const header = computed(() => { try { return JSON.parse(atob(rawToken.value.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))) } catch { return {} } })
 
 const copy = async (text, what) => {
   try { await navigator.clipboard.writeText(text); message.success(`${what} copied`) } catch { message.error('Clipboard not available') }
@@ -236,9 +264,35 @@ onBeforeUnmount(() => clearInterval(tick))
 .method__text .page__muted { font-size: 0.78rem; }
 .pref + .pref { margin-top: 1rem; }
 .pref__label { font-weight: 600; margin-bottom: 0.4rem; }
-.token { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
-.token__value { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; padding: 0.5rem 0.7rem; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 8px; overflow-wrap: anywhere; }
-.claims :deep(td) { font-size: 0.85rem; }
+.jwt { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.jwt__parts { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; padding: 0.55rem 0.7rem; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 8px; overflow-wrap: anywhere; line-height: 1.5; }
+.jwt__part--h { color: #dc2626; }
+.jwt__part--p { color: #7c3aed; }
+.jwt__part--s { color: #2563eb; }
+.jwt__dot { color: var(--p-muted); margin: 0 0.1rem; }
+.jwt__legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; font-size: 0.78rem; color: var(--p-muted); margin-bottom: 1rem; align-items: center; }
+.jwt__legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.jwt__swatch { width: 0.65rem; height: 0.65rem; border-radius: 3px; display: inline-block; }
+.jwt__swatch--h { background: #dc2626; }
+.jwt__swatch--p { background: #7c3aed; }
+.jwt__swatch--s { background: #2563eb; }
+.claims { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.claim { display: flex; gap: 0.7rem; padding: 0.75rem 0.85rem; border-radius: 12px; background: var(--p-bg); border: 1px solid var(--p-border); }
+.claim--empty { border-style: dashed; }
+.claim__icon { flex: none; width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, #7c3aed 12%, transparent); color: #7c3aed; }
+.claim--empty .claim__icon { background: var(--p-card); color: var(--p-muted); }
+.claim__body { min-width: 0; display: grid; gap: 0.2rem; }
+.claim__head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.claim__name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem; font-weight: 700; color: var(--p-text); }
+.claim__badge { font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--p-card); border: 1px solid var(--p-border); color: var(--p-muted); font-variant-numeric: tabular-nums; }
+.claim__badge[data-tone="ok"] { color: #16a34a; border-color: #16a34a55; }
+.claim__badge[data-tone="warn"] { color: #f59e0b; border-color: #f59e0b55; }
+.claim__badge[data-tone="bad"] { color: #ef4444; border-color: #ef444455; }
+.claim__value { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; align-items: center; }
+.claim--empty .claim__value { color: var(--p-muted); font-weight: 400; }
+.claim__tag { margin: 0; }
+.claim__pair { display: inline-flex; gap: 0.35rem; }
+.claim__meaning { font-size: 0.78rem; color: var(--p-muted); }
 .pill__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; display: inline-block; }
 @media (prefers-reduced-motion: reduce) { .hero__band { background: #2563eb; } }
 </style>
