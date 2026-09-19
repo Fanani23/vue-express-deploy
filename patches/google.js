@@ -65,7 +65,6 @@ export const callback = async (req, res) => {
       const id = await authFns.createUser({
         email,
         username: info.name || email.split('@')[0],
-        roles: process.env.SIGNUP_DEFAULT_ROLE || 'TestGroup',
         tenant_id: Number(process.env.SIGNUP_DEFAULT_TENANT || 1),
         salt: '',
         password: '',

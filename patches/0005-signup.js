@@ -46,8 +46,7 @@ edit("common/compiled/node/express/controller/auth/own.js", "const signup = asyn
 [`import { matchScryptHash } from '../../../auth/scrypt.js';`,
 `import { matchScryptHash, setScryptHash } from '../../../auth/scrypt.js';`],
 [`export { login, logout, otp, refresh };`,
-`const SIGNUP_DEFAULT_ROLE = process.env.SIGNUP_DEFAULT_ROLE || 'TestGroup';
-const SIGNUP_DEFAULT_TENANT = Number(process.env.SIGNUP_DEFAULT_TENANT || 1);
+`const SIGNUP_DEFAULT_TENANT = Number(process.env.SIGNUP_DEFAULT_TENANT || 1);
 const EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
 
 const signup = async (req, res) => {
@@ -68,7 +67,6 @@ const signup = async (req, res) => {
       [AUTH_USER_FIELD_SALT]: salt,
       [AUTH_USER_FIELD_PASSWORD]: await setScryptHash(password, salt),
       [AUTH_USER_FIELD_GAKEY]: gaKey,
-      roles: SIGNUP_DEFAULT_ROLE,
       tenant_id: SIGNUP_DEFAULT_TENANT,
       revoked: '',
       refreshToken: '',

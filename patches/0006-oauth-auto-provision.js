@@ -19,7 +19,6 @@ const after = `      let user = await authFns.findUser({ [OAUTH_OPTIONS.FIND_ID]
             email,
             username: oauthUser.login || email.split('@')[0],
             [OAUTH_OPTIONS.FIND_ID]: oauthId,
-            roles: process.env.SIGNUP_DEFAULT_ROLE || 'TestGroup',
             tenant_id: Number(process.env.SIGNUP_DEFAULT_TENANT || 1),
             salt: '',
             password: '', // no password: this account signs in with GitHub only

@@ -14,7 +14,7 @@ commits validated in the setup notes:
 
 | Path | What it does |
 |---|---|
-| `patches/` + `patches/apply.sh` | backend fixes/extensions applied to a checkout of `express-template`: keyv string keys, awaited OTP verify (security fix), EMAIL one-time codes, sign-up, GitHub sign-in with auto-provisioning, Google sign-in, `/api/auth/providers`, OAuth secrets from the environment, fixed per-account pin (`users.otp_pin`). Idempotent (marker-based). |
+| `patches/` + `patches/apply.sh` | backend fixes/extensions applied to a checkout of `express-template`: keyv string keys, awaited OTP verify (security fix), EMAIL one-time codes, sign-up, GitHub sign-in with auto-provisioning, Google sign-in, `/api/auth/providers`, OAuth secrets from the environment, fixed per-account pin (`users.otp_pin`), every new account (sign-up, GitHub, Google) created as `Viewer` — comma column and RBAC rows, role and permissions created on first use. Idempotent (marker-based). |
 | `web-techtest/` + `web-techtest/apply.sh` | the custom frontend app, created as a copy of the template's `web-sample` with `web-techtest/app/` laid over it — the customisation route the template README prescribes, so `web-sample` is never edited. Registers `npm run techtest` / `techtest:build` and the missing `/signup` route. |
 | `migrations/` | kit migrations copied next to the template's before `migrate:latest`: `users.otp_pin` — when set on an account, that pin is its second factor instead of an emailed / authenticator code (used for the demo accounts on the VPS); accounts without it, including every sign-up, get the real code |
 | `systemd/` | `vt-db` (PGlite server), `vt-api` (Express), `vt-fe` (Vite) units for running the stack as services on a dev box |
