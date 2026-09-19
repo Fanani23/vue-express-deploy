@@ -94,12 +94,14 @@
             </template>
           </a-table>
           <div v-if="total > 0" class="pager">
-            <span class="pager__info">Showing <strong>{{ rangeStart }}–{{ rangeEnd }}</strong> of <strong>{{ total }}</strong></span>
+            <span class="pager__info">Showing <strong>{{ rangeStart }}–{{ rangeEnd }}</strong> of <strong>{{ total }}</strong> · page {{ page }} of {{ pageCount }}</span>
             <div class="pager__controls">
               <a-select v-model:value="pageSize" size="small" class="pager__size" :options="[8, 16, 32].map((n) => ({ value: n, label: `${n} / page` }))" />
-              <a-button size="small" :disabled="page <= 1" @click="goTo(page - 1)"><template #icon><LeftOutlined /></template></a-button>
-              <button v-for="p in pageItems" :key="p.key" type="button" class="pager__page" :class="{ 'pager__page--on': p.n === page, 'pager__page--gap': p.gap }" :disabled="p.gap" @click="goTo(p.n)">{{ p.gap ? '…' : p.n }}</button>
-              <a-button size="small" :disabled="page >= pageCount" @click="goTo(page + 1)"><template #icon><RightOutlined /></template></a-button>
+              <a-tooltip title="First page"><a-button size="small" :disabled="page <= 1" @click="goTo(1)"><template #icon><DoubleLeftOutlined /></template></a-button></a-tooltip>
+              <a-tooltip title="Previous"><a-button size="small" :disabled="page <= 1" @click="goTo(page - 1)"><template #icon><LeftOutlined /></template></a-button></a-tooltip>
+              <button v-for="n in pageItems" :key="n" type="button" class="pager__page" :class="{ 'pager__page--on': n === page }" @click="goTo(n)">{{ n }}</button>
+              <a-tooltip title="Next"><a-button size="small" :disabled="page >= pageCount" @click="goTo(page + 1)"><template #icon><RightOutlined /></template></a-button></a-tooltip>
+              <a-tooltip title="Last page"><a-button size="small" :disabled="page >= pageCount" @click="goTo(pageCount)"><template #icon><DoubleRightOutlined /></template></a-button></a-tooltip>
             </div>
           </div>
         </div>
@@ -144,7 +146,7 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined } from '@ant-design/icons-vue'
 import { tasksApi, useTaskPulseSocket, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
 
 const api = tasksApi.urls.api
@@ -205,15 +207,9 @@ const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.va
 const rangeStart = computed(() => (total.value ? (page.value - 1) * pageSize.value + 1 : 0))
 const rangeEnd = computed(() => Math.min(total.value, page.value * pageSize.value))
 const pageItems = computed(() => {
-  const n = pageCount.value, c = page.value, out = []
-  const push = (i) => out.push({ key: i, n: i })
-  if (n <= 7) { for (let i = 1; i <= n; i++) push(i); return out }
-  push(1)
-  if (c > 3) out.push({ key: 'g1', gap: true })
-  for (let i = Math.max(2, c - 1); i <= Math.min(n - 1, c + 1); i++) push(i)
-  if (c < n - 2) out.push({ key: 'g2', gap: true })
-  push(n)
-  return out
+  const n = pageCount.value
+  const start = Math.min(Math.max(1, page.value - 1), Math.max(1, n - 2))
+  return Array.from({ length: Math.min(3, n) }, (_, i) => start + i)
 })
 const goTo = (p) => { page.value = Math.min(Math.max(1, p), pageCount.value); loadTasks() }
 watch(pageSize, () => { page.value = 1; loadTasks() })

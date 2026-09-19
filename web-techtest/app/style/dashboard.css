@@ -89,4 +89,3 @@
 .pager__page:hover:not(:disabled) { border-color: var(--d-accent); color: var(--d-accent); }
 .pager__page--on { background: var(--d-accent); border-color: var(--d-accent); color: #fff; font-weight: 600; }
 .pager__page--on:hover { color: #fff !important; }
-.pager__page--gap { border: 0; background: transparent; color: var(--d-muted); cursor: default; }
