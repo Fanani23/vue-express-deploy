@@ -69,7 +69,7 @@ const collapsed = ref(false)
 const pageTitle = computed(() => (typeof route.name === 'string' ? route.name.replace(/([a-z])([A-Z])/g, '$1 $2') : 'Dashboard'))
 const identity = computed(() => {
   const u = store.user || {}
-  return u.user_meta?.email || u.email || u.username || `user #${u.sub ?? ''}`
+  return u.nickname || u.user_meta?.email || u.email || u.username || `user #${u.sub ?? ''}`
 })
 const roles = computed(() => {
   const r = store.user?.roles
