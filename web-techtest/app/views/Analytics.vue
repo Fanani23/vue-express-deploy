@@ -1,49 +1,76 @@
 <template>
-  <div class="page">
+  <div class="page dash">
     <header class="page__head">
       <div>
         <h1 class="page__title">Analytics</h1>
         <p class="page__subtitle">Computed live from every task in TaskPulse — nothing here is hard-coded.</p>
       </div>
-      <a-space>
-        <a-tag class="pill" :color="loading ? 'processing' : error ? 'error' : 'success'"><span class="pill__dot" />{{ loading ? 'loading' : error ? 'error' : `${tasks.length} tasks` }}</a-tag>
-        <a-button size="small" @click="load" :loading="loading">refresh</a-button>
-      </a-space>
+      <div class="dash__pills">
+        <a-tag class="pill" :color="loading ? 'processing' : error ? 'error' : 'success'"><DatabaseOutlined />{{ loading ? 'loading' : error ? 'error' : `${tasks.length} tasks` }}</a-tag>
+        <a-button size="small" @click="load" :loading="loading"><template #icon><ReloadOutlined /></template>refresh</a-button>
+      </div>
     </header>
 
     <a-row :gutter="[16, 16]">
       <a-col :xs="24" :lg="8">
         <div class="page__card">
-          <h3 class="page__h3">By status</h3>
-          <canvas ref="statusCanvas" height="220"></canvas>
-          <p class="page__muted">{{ pct('Done') }} done · {{ pct('InProgress') }} in progress · {{ pct('Todo') }} still to do</p>
+          <div class="sec">
+            <span class="sec__icon"><PieChartOutlined /></span>
+            <h3 class="sec__title">By status</h3>
+            <span class="sec__count">{{ tasks.length }}</span>
+          </div>
+          <div class="chart chart--ring"><canvas ref="statusCanvas"></canvas></div>
+          <ul class="legend">
+            <li v-for="s in STATUSES" :key="s" class="legend__row">
+              <span class="legend__dot" :data-status="s" />
+              <span class="legend__label">{{ STATUS_LABEL[s] }}</span>
+              <span class="legend__count">{{ counts[s] }}</span>
+              <span class="legend__pct">{{ pct(s) }}</span>
+            </li>
+          </ul>
         </div>
       </a-col>
       <a-col :xs="24" :lg="16">
         <div class="page__card">
-          <h3 class="page__h3">Created and completed per day <span class="page__muted">(last 14 days)</span></h3>
-          <canvas ref="dailyCanvas" height="110"></canvas>
+          <div class="sec">
+            <span class="sec__icon"><BarChartOutlined /></span>
+            <h3 class="sec__title">Created and completed per day</h3>
+            <span class="sec__count">last 14 days</span>
+          </div>
+          <div class="chart chart--bars"><canvas ref="dailyCanvas"></canvas></div>
         </div>
       </a-col>
       <a-col :xs="24" :lg="12">
         <div class="page__card">
-          <h3 class="page__h3">Longest open</h3>
-          <a-table :data-source="oldestOpen" :columns="openColumns" :pagination="false" size="small" row-key="id">
+          <div class="sec">
+            <span class="sec__icon"><HourglassOutlined /></span>
+            <h3 class="sec__title">Longest open</h3>
+            <span class="sec__count">{{ oldestOpen.length }}</span>
+          </div>
+          <a-table :data-source="oldestOpen" :columns="openColumns" :pagination="false" size="small" row-key="id" class="tasks">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'age'">{{ age(record.createdAt) }}</template>
+              <template v-if="column.key === 'title'"><div class="task"><span class="task__mark" :data-status="record.status"><ClockCircleOutlined v-if="record.status === 'InProgress'" /><BorderOutlined v-else /></span><span class="task__title">{{ record.title }}</span></div></template>
+              <template v-else-if="column.key === 'age'"><span class="task__when"><HistoryOutlined />{{ age(record.createdAt) }}</span></template>
               <template v-else-if="column.key === 'status'"><a-tag :color="STATUS_COLOR[record.status]">{{ STATUS_LABEL[record.status] }}</a-tag></template>
             </template>
+            <template #emptyText><div class="empty"><CheckCircleOutlined class="empty__icon" /><span>Nothing open</span><span class="empty__hint">Every task is done.</span></div></template>
           </a-table>
         </div>
       </a-col>
       <a-col :xs="24" :lg="12">
         <div class="page__card">
-          <h3 class="page__h3">Recently touched</h3>
-          <a-table :data-source="recent" :columns="recentColumns" :pagination="false" size="small" row-key="id">
+          <div class="sec">
+            <span class="sec__icon"><HistoryOutlined /></span>
+            <h3 class="sec__title">Recently touched</h3>
+            <span class="sec__count">{{ recent.length }}</span>
+          </div>
+          <a-table :data-source="recent" :columns="recentColumns" :pagination="false" size="small" row-key="id" class="tasks">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'updated'">{{ timeAgo(record.updatedAt) }}</template>
+              <template v-if="column.key === 'title'"><div class="task"><span class="task__mark" :data-status="record.status"><CheckOutlined v-if="record.status === 'Done'" /><ClockCircleOutlined v-else-if="record.status === 'InProgress'" /><BorderOutlined v-else /></span><span class="task__title">{{ record.title }}</span></div></template>
+              <template v-else-if="column.key === 'updated'"><span class="task__when"><HistoryOutlined />{{ timeAgo(record.updatedAt) }}</span></template>
               <template v-else-if="column.key === 'status'"><a-tag :color="STATUS_COLOR[record.status]">{{ STATUS_LABEL[record.status] }}</a-tag></template>
             </template>
+            <template #emptyText><div class="empty"><InboxOutlined class="empty__icon" /><span>No tasks yet</span></div></template>
           </a-table>
         </div>
       </a-col>
@@ -59,6 +86,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
 import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR } from '../taskpulse.js'
+import { DatabaseOutlined, ReloadOutlined, PieChartOutlined, BarChartOutlined, HourglassOutlined, HistoryOutlined, ClockCircleOutlined, BorderOutlined, CheckOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons-vue'
 import { useTheme } from '../theme.js'
 
 const { isDark } = useTheme()
@@ -138,14 +166,14 @@ const recentColumns = [
 const draw = () => {
   if (!statusCanvas.value || !dailyCanvas.value) return
   statusChart?.destroy(); dailyChart?.destroy()
-  const common = { responsive: true, animation: { duration: 400 }, plugins: { legend: { labels: { color: textColor() } } } }
+  const common = { responsive: true, maintainAspectRatio: false, animation: { duration: 400 }, plugins: { legend: { labels: { color: textColor() } } } }
   statusChart = new Chart(statusCanvas.value, {
     type: 'doughnut',
     data: {
       labels: STATUSES.map((s) => STATUS_LABEL[s]),
       datasets: [{ data: STATUSES.map((s) => counts.value[s]), backgroundColor: STATUSES.map((s) => palette[s]), borderWidth: 0 }],
     },
-    options: { ...common, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: textColor(), boxWidth: 12 } } } },
+    options: { ...common, cutout: '70%', plugins: { legend: { display: false } } },
   })
   dailyChart = new Chart(dailyCanvas.value, {
     type: 'bar',

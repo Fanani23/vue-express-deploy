@@ -89,3 +89,14 @@
 .pager__page:hover:not(:disabled) { border-color: var(--d-accent); color: var(--d-accent); }
 .pager__page--on { background: var(--d-accent); border-color: var(--d-accent); color: #fff; font-weight: 600; }
 .pager__page--on:hover { color: #fff !important; }
+
+.chart { position: relative; }
+.chart--ring { height: 220px; }
+.chart--bars { height: 300px; }
+.legend { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
+.legend__row { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; border-radius: 10px; background: var(--d-bg); border: 1px solid var(--d-border); font-size: 0.9rem; }
+.legend__dot { width: 0.7rem; height: 0.7rem; border-radius: 50%; background: var(--d-todo); }
+.legend__dot[data-status="InProgress"] { background: var(--d-progress); }
+.legend__dot[data-status="Done"] { background: var(--d-done); }
+.legend__count { font-weight: 700; font-variant-numeric: tabular-nums; }
+.legend__pct { min-width: 3.2rem; text-align: right; color: var(--d-muted); font-variant-numeric: tabular-nums; }
