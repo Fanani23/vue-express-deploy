@@ -11,6 +11,7 @@ export const PUBLIC_ROUTES = [
 
 export const SECURE_ROUTES = [
   { path: '/dashboard', name: 'Dashboard', component: async () => import('../views/Dashboard.vue') },
+  { path: '/tasks', name: 'Tasks', component: async () => import('../views/Tasks.vue') },
   { path: '/analytics', name: 'Analytics', component: async () => import('../views/Analytics.vue') },
   { path: '/profile', name: 'Profile', component: async () => import('../views/Profile.vue') },
   { path: '/template-demos/tests', name: 'Vue tests', component: async () => import('../views/Demo/DemoTest.vue') },
