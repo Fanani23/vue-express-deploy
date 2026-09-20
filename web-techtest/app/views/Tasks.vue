@@ -71,9 +71,9 @@
             <span v-if="overdueCount" class="task-filters__overdue" data-cy="overdue-count"><ClockCircleOutlined /> {{ overdueCount }} overdue</span>
             <span class="task-filters__csv">
               <a-tooltip title="Download what this list shows (same filters) as CSV"><a-button size="small" :href="exportHref" download data-cy="export-csv"><template #icon><DownloadOutlined /></template>CSV</a-button></a-tooltip>
-              <a-upload accept=".csv,text/csv" :show-upload-list="false" :before-upload="importCsv" :custom-request="() => {}">
-                <a-tooltip title="Import a CSV (title required; id updates an existing task; labels a|b)"><a-button size="small" :loading="importing" data-cy="import-csv"><template #icon><UploadOutlined /></template>Import</a-button></a-tooltip>
-              </a-upload>
+              <!-- a plain file input: Ant's Upload wraps the button in a second role="button" (axe: nested-interactive) -->
+              <input type="file" accept=".csv,text/csv" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="(e) => pickCsv(e, importCsv)" />
+              <a-tooltip title="Import a CSV (title required; id updates an existing task; labels a|b)"><a-button size="small" :loading="importing" data-cy="import-csv" @click="(e) => e.currentTarget.previousElementSibling.click()"><template #icon><UploadOutlined /></template>Import</a-button></a-tooltip>
             </span>
           </div>
           <a-alert v-if="importResult" type="info" show-icon closable class="import-result" data-cy="import-result" :message="`Imported: ${importResult.created} new, ${importResult.updated} updated, ${importResult.skipped.length} skipped`" :description="importResult.skipped.length ? importResult.skipped.slice(0, 5).map((s) => `row ${s.row}: ${s.error}`).join(' · ') : ''" @close="importResult = null" />
@@ -227,8 +227,9 @@ const importCsv = async (file) => {
     message.success(`${importResult.value.created} created, ${importResult.value.updated} updated`)
     await refresh()
   } catch (e) { fail(e) } finally { importing.value = false }
-  return false // handled here, nothing for a-upload to upload
 }
+// hand the chosen file over and clear the input so the same file can be picked again
+const pickCsv = (e, handler) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handler(f) }
 watch(extra, () => { page.value = 1; refresh() })
 const shout = ref('')
 
@@ -367,6 +368,7 @@ useChangeFeed(() => refresh(), { resources: ['task'] })
 .task__meta { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
 .task__chip { margin: 0; font-size: 0.72rem; line-height: 1.4; }
 .task__chip--label { background: var(--p-bg, #f5f5f5); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 <style scoped>
 .search { margin-bottom: 0.75rem; }

@@ -161,9 +161,10 @@
                 <span v-else class="kind__name kind__name--plain">{{ k.kind }}</span>
                 <span class="kind__count">{{ k.count }}</span>
                 <a :href="catalogApi.exportUrl(k.kind)" download class="kind__csv" :title="`Download ${k.kind} as CSV`" :aria-label="`Download ${k.kind} as CSV`"><DownloadOutlined /></a>
-                <a-upload v-if="admin" accept=".csv,text/csv" :show-upload-list="false" :before-upload="(f) => importKind(k.kind, f)" :custom-request="() => {}" class="kind__import">
-                  <a-button size="small" type="text" :title="`Import ${k.kind} from CSV (code, label, parents a|b, attributes JSON, sort)`" :aria-label="`Import ${k.kind} from CSV`"><template #icon><UploadOutlined /></template></a-button>
-                </a-upload>
+                <template v-if="admin">
+                  <input type="file" accept=".csv,text/csv" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="(e) => pickCsv(e, (f) => importKind(k.kind, f))" />
+                  <a-button size="small" type="text" class="kind__import" @click="(e) => e.currentTarget.previousElementSibling.click()" :title="`Import ${k.kind} from CSV (code, label, parents a|b, attributes JSON, sort)`" :aria-label="`Import ${k.kind} from CSV`"><template #icon><UploadOutlined /></template></a-button>
+                </template>
               </li>
             </ul>
             <template v-if="admin">
@@ -327,8 +328,8 @@ const importKind = async (kind, file) => {
     message.success(`${kind}: ${r.created} created, ${r.updated} updated${r.skipped.length ? `, ${r.skipped.length} skipped (row ${r.skipped[0].row}: ${r.skipped[0].error})` : ''}`)
     await loadKinds()
   } catch (e) { fail(e) }
-  return false
 }
+const pickCsv = (e, handler) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handler(f) }
 const unlockMember = async (m) => { try { await usersApi.update(m.id, { unlock: true }); message.success(`${m.username} unlocked`); await loadMembers() } catch (e) { fail(e) } }
 
 const validUrl = (u) => /^(https?:\/\/|\/)/.test((u || '').trim())
@@ -415,6 +416,7 @@ useChangeFeed(() => loadAll())
 .inline-add--hook { grid-template-columns: 1.4fr 1fr auto auto; }
 .inline-add__select { min-width: 9rem; }
 .kind__import { margin-left: 0.1rem; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }
 .inline-add--users { grid-template-columns: 1.4fr 1fr auto auto; }
