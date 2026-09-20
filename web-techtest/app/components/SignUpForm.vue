@@ -12,7 +12,7 @@
         </a-form-item>
 
         <a-form-item label="Password" class="auth__required" :validate-status="fieldError.password ? 'error' : ''" :help="fieldError.password">
-          <a-input-password data-cy="signup-password" v-model:value="password" size="large" autocomplete="new-password" placeholder="at least 8 characters" @blur="touched.password = true">
+          <a-input-password data-cy="signup-password" v-model:value="password" size="large" autocomplete="new-password" placeholder="at least 10 characters, letters and digits" @blur="touched.password = true">
             <template #prefix><LockOutlined class="auth__icon" /></template>
           </a-input-password>
           <div class="strength" :data-level="strength.level" aria-live="polite">
@@ -77,7 +77,7 @@ defineEmits(['signin'])
 const { VITE_REFRESH_URL } = import.meta.env
 const store = useMainStore()
 
-const PASSWORD_MIN = 8
+const PASSWORD_MIN = 10
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const digitsOnly = (v) => String(v ?? '').replace(/\D/g, '').slice(0, 6)
 
@@ -107,6 +107,8 @@ const emailError = computed(() => {
 const passwordError = computed(() => {
   if (!password.value) return 'Password is required'
   if (password.value.length < PASSWORD_MIN) return `At least ${PASSWORD_MIN} characters`
+  if (!/[A-Za-z]/.test(password.value) || !/[0-9]/.test(password.value)) return 'Use letters and digits'
+  if (new Set(password.value).size < 4) return 'Too repetitive'
   return ''
 })
 const confirmError = computed(() => {

@@ -101,7 +101,7 @@ cd "$VT_HOME/vue-antd-template/apps"
 cat > web-techtest/envs/.env.cloud <<'EOF'
 VITE_SENTRY_DSN=
 VITE_API_URL=
-VITE_WITH_CREDENTIALS=same-origin
+VITE_WITH_CREDENTIALS=include
 VITE_WS_URL=
 VITE_WS_MS=5000
 BASE_PATH=/
@@ -164,6 +164,14 @@ EOF
   chmod 0600 /etc/vt/api.env
 fi
 sed -i "s/^USE_OTP=.*/USE_OTP=${USE_OTP:-EMAIL} # EMAIL (code by mail), GA (authenticator app), TEST (111111)/" "$VT_HOME/express-template/apps/sample-api/.env"
+# Template config for the kit (config, not code): HttpOnly refresh cookie, a real cookie max-age, secure on HTTPS,
+# and Redis for sessions/one-time codes so an API restart does not sign everyone out.
+ENV_JSON="$VT_HOME/express-template/apps/sample-api/.env.json"
+grep -q '"COOKIE_HTTPONLY"' "$ENV_JSON" || as_vt sed -i 's/^  "JWT": {$/  "JWT": {\n    "COOKIE_HTTPONLY": true, \/\/ refresh token only in an HttpOnly cookie (kit)/' "$ENV_JSON"
+as_vt sed -i 's/^    "maxAge": 0, \/\/ no expiry.*/    "maxAge": 86400000, \/\/ 1 day in ms - the server still refuses a refresh token older than JWT_REFRESH_EXPIRY_SEC (kit)/' "$ENV_JSON"
+if [[ "$WEB_ORIGIN" == https://* ]]; then as_vt sed -i 's/^    "secure": false, \/\/ true if sameSite=None/    "secure": true, \/\/ HTTPS deployment (kit)/' "$ENV_JSON"; fi
+apt-get install -y -q redis-server >/dev/null && systemctl enable --now redis-server >/dev/null
+grep -q '^KEYV_REDIS_URL=' /etc/vt/api.env || echo 'KEYV_REDIS_URL=redis://127.0.0.1:6379' >> /etc/vt/api.env
 # The template ships a 9-character JWT_SECRET. Replace a weak one with 48 random characters, once - TaskPulse verifies
 # the same tokens and refuses secrets under 16 characters.
 if [[ $(sed -n 's/^JWT_SECRET=//p' "$VT_HOME/express-template/apps/sample-api/.env" | head -1 | wc -c) -lt 33 ]]; then

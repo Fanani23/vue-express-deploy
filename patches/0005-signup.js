@@ -54,7 +54,8 @@ const signup = async (req, res) => {
     const email = String(req.body?.[AUTH_USER_FIELD_LOGIN] ?? req.body?.email ?? '').trim().toLowerCase();
     const password = String(req.body?.[AUTH_USER_FIELD_PASSWORD] ?? req.body?.password ?? '');
     if (!EMAIL_RE.test(email)) return res.status(400).json({ message: 'A valid email address is required' });
-    if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    if (password.length < 10 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) return res.status(400).json({ message: 'Password must be at least 10 characters with letters and digits' });
+    if (/^(password|qwerty|letmein|welcome|admin)/i.test(password) || new Set(password).size < 4) return res.status(400).json({ message: 'That password is too common' });
     if (await authFns.findUser({ [AUTH_USER_FIELD_LOGIN]: email })) {
       return res.status(409).json({ message: 'An account with this email already exists' });
     }

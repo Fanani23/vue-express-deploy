@@ -43,9 +43,9 @@ export const useMainStore = defineStore('main', () => {
     session.save(user.value)
   }
 
-  function restoreSession() {
+  async function restoreSession() {
     if (user.value) return true
-    const restored = session.restore()
+    const restored = await session.restore()
     if (!restored) return false
     user.value = restored
     return true

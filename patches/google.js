@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { authFns, createToken, setTokensToHeader } from '../../../auth/index.js';
+import { authFns, createToken, setTokensToHeader, tokensForClient } from '../../../auth/index.js';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -77,8 +77,9 @@ export const callback = async (req, res) => {
     if (user.revoked) return res.status(401).json({ message: 'Revoked credentials' });
 
     const ours = await createToken(user);
-    setTokensToHeader(res, ours);
-    return res.redirect(`${spaCallback}#${ours.access_token};${ours.refresh_token};${JSON.stringify(ours.user_meta)}`);
+    setTokensToHeader(res, ours); // HttpOnly cookies when COOKIE_HTTPONLY; the hash then carries the access token only
+    const safe = tokensForClient(ours);
+    return res.redirect(`${spaCallback}#${safe.access_token};${safe.refresh_token || ''};${JSON.stringify(safe.user_meta)}`);
   } catch (e) {
     globalThis.logger?.info?.('google auth err', e.toString());
     return res.status(401).json({ message: 'NOT Authenticated' });

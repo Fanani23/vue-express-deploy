@@ -37,7 +37,7 @@
             <li class="fact"><span class="fact__icon"><FieldTimeOutlined /></span><span class="fact__body"><span class="fact__label">Expires</span><span class="fact__value">{{ fmt(user.exp) }}</span></span></li>
             <li class="fact"><span class="fact__icon"><ReloadOutlined /></span><span class="fact__body"><span class="fact__label">Renewed this visit</span><span class="fact__value">{{ renewedTimes }}×</span></span></li>
             <li class="fact"><span class="fact__icon"><HourglassOutlined /></span><span class="fact__body"><span class="fact__label">Auto sign-out</span><span class="fact__value">after {{ idleLimitLabel }} idle · idle for {{ idleFor }}</span></span></li>
-            <li class="fact"><span class="fact__icon"><SaveOutlined /></span><span class="fact__body"><span class="fact__label">Survives a refresh</span><span class="fact__value">yes — tokens kept in this browser until sign-out or {{ idleLimitLabel }} idle</span></span></li>
+            <li class="fact"><span class="fact__icon"><SaveOutlined /></span><span class="fact__body"><span class="fact__label">Survives a refresh</span><span class="fact__value">yes — the access token is kept in this browser and the refresh token is an HttpOnly cookie, until sign-out or {{ idleLimitLabel }} idle</span></span></li>
           </ul>
         </div>
       </a-col>

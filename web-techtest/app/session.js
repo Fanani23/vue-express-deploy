@@ -6,6 +6,7 @@ export const IDLE_LIMIT_SECONDS = Number(import.meta.env.VITE_IDLE_LIMIT_SECONDS
 const TOUCH_EVERY_MS = 10 * 1000
 
 let lastTouch = 0
+let refreshing = null
 
 const read = () => {
   try {
@@ -23,10 +24,13 @@ const write = (value) => {
   } catch { }
 }
 
-let refreshing = null
+const expiresAt = (access) => {
+  try { return JSON.parse(atob(access.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp * 1000 } catch { return 0 }
+}
 
-// One refresh at a time: concurrent 401s share the same in-flight call. Sends the refresh token from memory when
-// we have one; in HttpOnly-cookie mode the browser attaches it by itself.
+// One refresh at a time: concurrent 401s share the same in-flight call. In HttpOnly-cookie mode (the deployed
+// configuration) the browser attaches the refresh cookie itself; the body only carries the access token so the
+// server can read `sub`. A refresh token kept in memory (non-cookie mode) is sent too.
 export const refreshTokens = () => {
   if (refreshing) return refreshing
   const tokens = http.getTokens?.() || {}
@@ -34,18 +38,20 @@ export const refreshTokens = () => {
     .then(({ data }) => {
       http.setTokens({ access: data.access_token, refresh: data.refresh_token || tokens.refresh })
       const s = read()
-      if (s) { s.tokens = { access: data.access_token, refresh: data.refresh_token || tokens.refresh }; s.lastActive = Date.now(); write(s) }
+      if (s) { s.tokens = { access: data.access_token }; s.lastActive = Date.now(); write(s) }
       return data
     })
     .finally(() => { refreshing = null })
   return refreshing
 }
 
+// What survives a page reload: the user's claims and the short-lived access token. The refresh token is an
+// HttpOnly cookie the page cannot read, so a reload after the access token expired goes through /api/auth/refresh.
 export const session = {
   save(user) {
     const tokens = http.getTokens?.() || {}
     if (!user || !tokens.access) return
-    write({ user, tokens: { access: tokens.access, refresh: tokens.refresh }, lastActive: Date.now() })
+    write({ user, tokens: { access: tokens.access }, lastActive: Date.now() })
     lastTouch = Date.now()
   },
 
@@ -64,16 +70,25 @@ export const session = {
     return s ? Math.round((Date.now() - (s.lastActive || 0)) / 1000) : Infinity
   },
 
-  restore() {
+  async restore() {
     const s = read()
     if (!s?.tokens?.access || !s.user) return null
     if (this.idleSeconds() >= IDLE_LIMIT_SECONDS) {
       this.clear('idle')
       return null
     }
-    http.setTokens({ access: s.tokens.access, refresh: s.tokens.refresh })
+    http.setTokens({ access: s.tokens.access })
     http.setOptions({ refreshUrl: import.meta.env.VITE_REFRESH_URL })
     lastTouch = 0
+    if (expiresAt(s.tokens.access) - Date.now() < 60 * 1000) {
+      try {
+        await refreshTokens()
+      } catch {
+        this.clear('expired')
+        http.setTokens({ access: undefined, refresh: undefined })
+        return null
+      }
+    }
     return s.user
   },
 

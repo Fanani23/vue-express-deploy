@@ -34,7 +34,7 @@ onMounted(async () => {
     return
   }
   const [access, refresh, metaJson] = hash.split(';')
-  if (!access || !refresh) {
+  if (!access) {
     failed.value = 'The identity provider did not return a session. Please try again.'
     return
   }
@@ -42,7 +42,7 @@ onMounted(async () => {
     const decoded = parseJwt(access)
     let meta = {}
     try { meta = metaJson ? JSON.parse(decodeURIComponent(metaJson)) : {} } catch { meta = JSON.parse(metaJson) }
-    http.setTokens({ access, refresh })
+    http.setTokens({ access, refresh: refresh || undefined })
     http.setOptions({ refreshUrl: VITE_REFRESH_URL })
     history.replaceState(null, '', route.path)
     await store.doLogin({ ...decoded, user_meta: meta, signin_provider: 'google', otp_fixed: false })
