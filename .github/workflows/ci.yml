@@ -33,7 +33,9 @@ jobs:
           ! grep -rl $'\r' kit --include='*.sh' --include='*.service' --include='*.js' --include='*.mjs' --include='*.vue'
 
       - name: Unit tests for the overlay modules (session, TaskPulse client, socket bus)
-        run: cd kit/web-techtest/unit && npm ci --no-audit --no-fund --loglevel=error && npm test
+        run: |
+          cd kit/web-techtest/unit && npm ci --no-audit --no-fund --loglevel=error && npm run coverage
+          node -e 'const s=require("./coverage/coverage-summary.json").total; const line=`### Frontend unit coverage: **${s.lines.pct}%** lines, ${s.functions.pct}% functions (session.js, taskpulse.js, users.js)`; console.log(line); require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY, line + "\n")'
 
       - name: Clone es-labs/express-template at the pinned commit
         run: |

@@ -168,3 +168,58 @@ describe('socket bus', () => {
     unsubscribe()
   })
 })
+
+describe('more of the REST surface', () => {
+  it('counts fan out to one request per status and read the totals', async () => {
+    fetch.mockImplementation(async (url) => jsonResponse(200, { total: url.includes('status=Done') ? 3 : url.includes('status=') ? 1 : 5 }))
+    await expect(mod.tasksApi.counts({ q: ' postgres ' })).resolves.toEqual({ total: 5, Todo: 1, InProgress: 1, Done: 3 })
+    expect(fetch.mock.calls[0][0]).toContain('q=postgres')
+  })
+  it('ready() is false when the API is unreachable', async () => {
+    fetch.mockRejectedValue(new Error('ECONNREFUSED'))
+    await expect(mod.tasksApi.ready()).resolves.toBe(false)
+    fetch.mockResolvedValue(new Response('Healthy', { status: 200 }))
+    await expect(mod.tasksApi.ready()).resolves.toBe(true)
+  })
+  it('uploads post multipart with the source and note, and build content URLs', async () => {
+    fetch.mockResolvedValue(jsonResponse(201, [{ id: 'u1' }]))
+    const file = new File(['x'], 'x.txt', { type: 'text/plain' })
+    await mod.uploadsApi.create({ files: [file], source: 'signpad', note: 'n' })
+    const [, init] = fetch.mock.calls[0]
+    expect(init.body).toBeInstanceOf(FormData)
+    expect(init.body.get('source')).toBe('signpad')
+    expect(init.headers['Content-Type']).toBeUndefined() // the browser sets the multipart boundary
+    expect(mod.uploadsApi.contentUrl('u1')).toBe('http://taskpulse.test/api/uploads/u1/content')
+  })
+  it('catalog list builds the query string', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, []))
+    await mod.catalogApi.list('countries', { parent: 'asia', q: ' ru ' })
+    expect(fetch.mock.calls[0][0]).toBe('http://taskpulse.test/api/catalog/countries?parent=asia&q=ru')
+    await mod.catalogApi.kinds()
+    expect(fetch.mock.calls[1][0]).toBe('http://taskpulse.test/api/catalog')
+  })
+})
+
+describe('change feed', () => {
+  it('debounces matching change events into the handler and warns once when it fails', async () => {
+    vi.useFakeTimers()
+    const { message } = await import('ant-design-vue')
+    const handler = vi.fn().mockRejectedValue(new Error('API restarting'))
+    // mount the composable inside a component so onMounted/onBeforeUnmount run
+    const { createApp, defineComponent, h } = await import('vue')
+    const app = createApp(defineComponent({ setup() { mod.useChangeFeed(handler, { resources: ['task'] }); return () => h('div') } }))
+    app.mount(document.createElement('div'))
+    const sock = FakeSocket.instances[0]
+    sock.open()
+    sock.receive({ type: 'changed', resource: 'catalog', action: 'create', id: '1' })
+    sock.receive({ type: 'changed', resource: 'task', action: 'create', id: '2' })
+    sock.receive({ type: 'changed', resource: 'task', action: 'update', id: '2' })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(handler).toHaveBeenCalledTimes(1) // catalog ignored, the two task events collapsed
+    expect(message.warning).toHaveBeenCalledTimes(1)
+    sock.receive({ type: 'changed', resource: 'task', action: 'delete', id: '2' })
+    await vi.advanceTimersByTimeAsync(400)
+    expect(message.warning).toHaveBeenCalledTimes(1) // rate limited to once a minute
+    app.unmount()
+  })
+})
