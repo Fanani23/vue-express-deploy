@@ -136,6 +136,7 @@ const bus = {
   state: ref('idle'),
   connectionId: ref(''),
   connections: ref(0),
+  user: ref(''),
   attempt: 0,
   timer: null,
   listeners: new Set(),
@@ -157,7 +158,9 @@ const connectBus = () => {
   bus.state.value = 'connecting'
   const socket = new WebSocket(WS)
   bus.socket = socket
-  socket.onopen = () => { bus.state.value = 'open'; bus.attempt = 0 }
+  // Attach the signed-in identity right after the handshake: only an authenticated connection may broadcast,
+  // and peers then see who said it. Reads (feed, change events) never need it.
+  socket.onopen = () => { bus.state.value = 'open'; bus.attempt = 0; bus.user.value = ''; authenticateBus() }
   socket.onerror = () => { bus.state.value = 'error' }
   socket.onclose = (ev) => {
     bus.state.value = 'closed'
@@ -174,8 +177,17 @@ const connectBus = () => {
     try { msg = JSON.parse(ev.data) } catch { return emit({ type: '_raw', data: ev.data }) }
     if (msg.connections != null) bus.connections.value = msg.connections
     if (msg.type === 'welcome') bus.connectionId.value = msg.connectionId
+    if (msg.type === 'authed') bus.user.value = msg.user || ''
     emit(msg)
   }
+}
+
+let authRetried = false
+const authenticateBus = async (afterRefresh = false) => {
+  const token = http.getTokens?.().access
+  if (!token || bus.socket?.readyState !== WebSocket.OPEN) return
+  bus.socket.send(JSON.stringify({ type: 'auth', token }))
+  authRetried = afterRefresh
 }
 
 export const subscribeSocket = (fn) => {
@@ -211,7 +223,10 @@ export const useTaskPulseSocket = ({ onMessage } = {}) => {
         push({ kind: 'system', text: `${msg.connectionId} ${msg.event} · ${msg.connections} online` })
         break
       case 'broadcast':
-        push({ kind: msg.from === bus.connectionId.value ? 'me' : 'peer', from: msg.from, text: msg.data })
+        push({ kind: msg.from === bus.connectionId.value ? 'me' : 'peer', from: msg.actor || msg.from, text: msg.data })
+        break
+      case 'authed':
+        push({ kind: 'system', text: `Signed in on the socket as ${msg.user}` })
         break
       case 'echo':
         push({ kind: 'me', text: `echo: ${msg.data}` })
@@ -224,6 +239,8 @@ export const useTaskPulseSocket = ({ onMessage } = {}) => {
         break
       case 'error':
         push({ kind: 'error', text: msg.error })
+        // An expired access token at handshake time: refresh once through express, then re-authenticate.
+        if (/expired token/i.test(msg.error || '') && !authRetried) refreshTokens().then(() => authenticateBus(true)).catch(() => {})
         break
       case '_closed':
         push({ kind: 'system', text: `Disconnected (${msg.code}${msg.reason ? ' ' + msg.reason : ''})` })
@@ -247,6 +264,7 @@ export const useTaskPulseSocket = ({ onMessage } = {}) => {
     state: bus.state,
     connectionId: bus.connectionId,
     connections: bus.connections,
+    user: bus.user,
     events,
     isOpen: computed(() => bus.state.value === 'open'),
     broadcast: (text) => socketSend('broadcast', text),

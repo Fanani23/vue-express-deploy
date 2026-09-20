@@ -47,5 +47,17 @@ t.check('audit trail names the actor', audit.some((a) => a.action === 'delete' &
 const anon = await t.page.evaluate(async (u) => (await fetch(u + '/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"title":"x"}' })).status, TASKPULSE)
 t.check('anonymous write is refused', anon === 401, String(anon))
 
+// The socket: the app signs in on it with the access token, so the broadcast box is enabled and peers see who spoke;
+// an anonymous connection is refused when it tries to broadcast.
+const feed = await t.page.$$eval('[data-cy=feed] li', (els) => els.map((e) => e.textContent))
+t.check('socket signed in with the session', feed.some((x) => /Signed in on the socket as .+@/.test(x)) && !(await t.page.$('[data-cy=broadcast-text] input[disabled], input[data-cy=broadcast-text][disabled]')))
+const ws = TASKPULSE.replace(/^http/, 'ws') + '/ws'
+const anonWs = await t.page.evaluate((url) => new Promise((resolve) => {
+  const s = new WebSocket(url); const seen = []
+  s.onmessage = (e) => { const m = JSON.parse(e.data); seen.push(m); if (m.type === 'welcome') s.send(JSON.stringify({ type: 'broadcast', data: 'anon' })); if (m.type === 'error') { s.close(); resolve(m.error) } }
+  setTimeout(() => resolve('timeout ' + JSON.stringify(seen)), 4000)
+}), ws)
+t.check('anonymous socket cannot broadcast', /Sign in to broadcast/.test(anonWs), anonWs)
+
 await tab2.close()
 await t.done()

@@ -120,10 +120,10 @@
           </div>
 
           <form class="feed__send" @submit.prevent="sendBroadcast">
-            <a-input v-model:value="shout" data-cy="broadcast-text" placeholder="Broadcast to every open tab…" :disabled="!ws.isOpen.value">
+            <a-input v-model:value="shout" data-cy="broadcast-text" :placeholder="ws.user.value ? `Broadcast to every open tab as ${ws.user.value}…` : 'Broadcast to every open tab…'" :disabled="!ws.isOpen.value || !ws.user.value">
               <template #prefix><NotificationOutlined class="new-task__icon" /></template>
             </a-input>
-            <a-button type="primary" html-type="submit" data-cy="broadcast" :disabled="!ws.isOpen.value || !shout.trim()"><template #icon><SendOutlined /></template></a-button>
+            <a-button type="primary" html-type="submit" data-cy="broadcast" :disabled="!ws.isOpen.value || !ws.user.value || !shout.trim()"><template #icon><SendOutlined /></template></a-button>
           </form>
           <div class="feed__tools">
             <a-button size="small" @click="ws.ping()" :disabled="!ws.isOpen.value"><template #icon><SwapOutlined /></template>ping</a-button>
