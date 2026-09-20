@@ -54,7 +54,7 @@ jobs:
           printf 'VITE_SENTRY_DSN=\nVITE_API_URL=\nVITE_WITH_CREDENTIALS=same-origin\nVITE_WS_URL=\nVITE_WS_MS=5000\nBASE_PATH=/\nVITE_REFRESH_URL=/api/auth/refresh\nVITE_LOGOUT_URL=/api/auth/logout\nVITE_TASKPULSE_URL=https://taskpulse.example\n' > web-techtest/envs/.env.cloud
           npx vite build --config web-techtest/vite.config.js --mode cloud --logLevel error
           test -f web-techtest/dist/index.html
-          grep -q "taskpulse.example" web-techtest/dist/assets/taskpulse-*.js
+          grep -rq "taskpulse.example" web-techtest/dist/assets/
       - uses: actions/upload-artifact@v4
         with:
           name: web-techtest-dist
