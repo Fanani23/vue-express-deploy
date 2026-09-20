@@ -4,15 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <script>
-    (function () {
-      var t = null
-      try { t = localStorage.getItem('theme') } catch (e) { }
-      if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-      document.documentElement.dataset.theme = t
-      document.documentElement.style.colorScheme = t
-    })()
-  </script>
+  <!-- Content Security Policy: only our own scripts, the two font hosts, OSM tiles for the map, blob: for the camera
+       and sign pad, and the API origins from the env (VITE_CSP_CONNECT). nginx adds frame-ancestors, HSTS & co.
+       Ant Design injects inline styles, hence style-src 'unsafe-inline'; no inline scripts anywhere (theme-boot.js). -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://fonts.googleapis.com %VITE_CSP_CONNECT%; worker-src 'self' blob:; base-uri 'self'; form-action 'self'; object-src 'none'; manifest-src 'self'">
+  <script src="/theme-boot.js"></script>
   <meta name="description" content="%VITE_APP_DESCRIPTION%">
   <meta name="keywords" content="%VITE_APP_KEYWORDS%">
   <link href="/favicon.svg" rel="icon" type="image/svg+xml">

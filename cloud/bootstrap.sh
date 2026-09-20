@@ -109,6 +109,7 @@ VITE_REFRESH_URL=/api/auth/refresh
 VITE_LOGOUT_URL=/api/auth/logout
 EOF
 echo "VITE_TASKPULSE_URL=$TASKPULSE_URL" >> web-techtest/envs/.env.cloud
+echo "VITE_CSP_CONNECT=$TASKPULSE_URL ${TASKPULSE_URL/http/ws}" >> web-techtest/envs/.env.cloud
 chown "$VT_USER" web-techtest/envs/.env.cloud
 as_vt npx vite build --config web-techtest/vite.config.js --mode cloud --logLevel error
 DIST="$VT_HOME/vue-antd-template/apps/web-techtest/dist"
@@ -185,6 +186,18 @@ systemctl enable --now vt-db vt-api >/dev/null
 systemctl restart vt-db vt-api
 
 log "Vue+Express: nginx on :80 (SPA + /api -> 3000)"
+cat > /etc/nginx/snippets/vt-security-headers.conf <<'EOF'
+# Response headers every location adds (nginx's add_header does not inherit into a location that has its own).
+# The Content-Security-Policy itself is a <meta> in the app's index.html (same policy in dev and prod); the header
+# carries the one directive a <meta> cannot: frame-ancestors.
+add_header X-Content-Type-Options "nosniff" always;
+add_header X-Frame-Options "DENY" always;
+add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy "camera=(self), microphone=(), geolocation=(self), payment=(), usb=()" always;
+add_header Cross-Origin-Opener-Policy "same-origin" always;
+add_header Content-Security-Policy "frame-ancestors 'none'" always;
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+EOF
 cat > /etc/nginx/sites-available/vue-express.conf <<EOF
 server {
     listen 80 default_server;
@@ -194,6 +207,7 @@ server {
     index index.html;
 
     location /api/ {
+        include snippets/vt-security-headers.conf;
         proxy_pass         http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header   Host \$host;
@@ -203,11 +217,13 @@ server {
     # Hashed build output: cache forever, and a chunk that no longer exists is a 404 - never the SPA's HTML
     # (an HTML body for a <script type=module> is the "expected a JavaScript module" error after a redeploy).
     location /assets/ {
+        include snippets/vt-security-headers.conf;
         try_files \$uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable";
     }
     # The HTML must always be revalidated, otherwise a browser keeps referencing chunks from the previous build.
     location / {
+        include snippets/vt-security-headers.conf;
         try_files \$uri \$uri/ /index.html;
         add_header Cache-Control "no-cache";
     }
