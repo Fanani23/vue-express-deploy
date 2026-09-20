@@ -1,7 +1,7 @@
-import { start, sleep, API } from '../lib.mjs'
+import { start, sleep, API, forgetSession } from '../lib.mjs'
 
 const t = await start()
-await t.login()
+await t.login({ fresh: true })
 const stored = await t.page.evaluate(() => {
   const s = JSON.parse(localStorage.getItem('vt.session') || 'null')
   return s ? { access: !!s.tokens.access, refresh: !!s.tokens.refresh, cookieVisible: document.cookie.includes('refresh_token') } : null
@@ -19,7 +19,7 @@ await t.page.evaluate(() => { const s = JSON.parse(localStorage.getItem('vt.sess
 await t.page.reload({ waitUntil: 'load' }); await sleep(2500)
 t.check('31 minutes idle signs out with a reason', t.page.url().endsWith('/signin') && (await t.text('[data-cy=signout-reason]')).includes('without activity'))
 
-await t.login()
+await t.login({ fresh: true })
 
 // Refresh-token rotation with reuse detection: the browser refreshes (its cookie is rotated), a replay of the old
 // cookie 11 s later is refused and revokes the family, so the browser's current cookie no longer refreshes either.
@@ -33,6 +33,7 @@ t.check('a replayed (rotated-away) refresh token is refused as reuse', replay.st
 t.check('…and revokes the whole family', (await refresh()) === 401)
 
 await t.clickText('.ant-menu-item', 'Logout'); await sleep(2000)
+forgetSession()
 const after = await t.page.evaluate(() => localStorage.getItem('vt.session'))
 t.check('logout clears the stored session', after === null && t.page.url().endsWith('/signin'))
 await t.done()

@@ -1,5 +1,8 @@
 import puppeteer from 'puppeteer-core'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -10,6 +13,13 @@ export const API = (process.env.E2E_API || (/127\.0\.0\.1:8080$/.test(BASE) ? 'h
 export const USER = process.env.E2E_USER || 'admin@techtest.dev'
 export const PASSWORD = process.env.E2E_PASSWORD || 'Techtest123!'
 export const CODE = process.env.E2E_CODE || '111111'
+
+// One sign-in per run, not one per script: the first script signs in through the UI and leaves the session
+// (cookies + the app's localStorage entry) in a file; the others restore it. Keeps a run well under the API's
+// 10 sign-ins per minute per client. session.mjs runs last because it deliberately revokes the session.
+const SESSION_FILE = join(tmpdir(), 'vt-e2e', createHash('sha1').update(BASE + '|' + USER).digest('hex').slice(0, 12) + '.json')
+const SESSION_MAX_AGE_MS = 10 * 60 * 1000
+export const forgetSession = () => { try { unlinkSync(SESSION_FILE) } catch { } }
 
 // Sidebar labels per route; navigation goes through real clicks so the router sees ordinary history entries.
 export const MENU = {
@@ -48,7 +58,35 @@ export const start = async ({ width = 1500, height = 940, dark = false } = {}) =
   await page.setViewport({ width, height })
   await page.emulateMediaFeatures([{ name: 'prefers-color-scheme', value: dark ? 'dark' : 'light' }])
 
-  const login = async (user = USER, pass = PASSWORD) => {
+  const restoreSession = async () => {
+    let saved
+    try { saved = JSON.parse(readFileSync(SESSION_FILE, 'utf8')) } catch { return false }
+    if (Date.now() - saved.at > SESSION_MAX_AGE_MS) return false
+    try {
+      await (context.setCookie ? context.setCookie(...saved.cookies) : page.setCookie(...saved.cookies))
+      await page.goto(BASE + '/signin', { waitUntil: 'load', timeout: 60000 })
+      await page.evaluate((v) => localStorage.setItem('vt.session', v), saved.storage)
+      await page.goto(BASE + '/dashboard', { waitUntil: 'load', timeout: 60000 })
+      await page.waitForSelector('[data-cy=dashboard]', { timeout: 15000 })
+      await sleep(800)
+      return true
+    } catch {
+      forgetSession()
+      return false
+    }
+  }
+  const saveSession = async () => {
+    try {
+      const cookies = await (context.cookies ? context.cookies() : page.cookies())
+      const storage = await page.evaluate(() => localStorage.getItem('vt.session'))
+      if (!storage) return
+      mkdirSync(join(tmpdir(), 'vt-e2e'), { recursive: true })
+      writeFileSync(SESSION_FILE, JSON.stringify({ at: Date.now(), cookies, storage }))
+    } catch { }
+  }
+  // fresh: true forces the sign-in UI (the session script tests it); otherwise a cached session is reused.
+  const login = async ({ user = USER, pass = PASSWORD, fresh = false } = {}) => {
+    if (!fresh && user === USER && await restoreSession()) { out.push('session: restored from the previous script'); return }
     await page.goto(BASE + '/signin', { waitUntil: 'load', timeout: 60000 })
     await page.waitForSelector('[data-cy=username]', { timeout: 60000 })
     await page.type('[data-cy=username]', user); await page.type('[data-cy=password]', pass)
@@ -57,6 +95,7 @@ export const start = async ({ width = 1500, height = 940, dark = false } = {}) =
     await sleep(400); await page.type('[data-cy=pin]', CODE); await sleep(300); await page.keyboard.press('Enter')
     await page.waitForSelector('[data-cy=dashboard]', { timeout: 20000 })
     await sleep(800)
+    if (user === USER) await saveSession()
   }
   const clickMenu = async (label) => {
     const h = await page.evaluateHandle((l) => [...document.querySelectorAll('.ant-menu-item, .ant-menu-submenu-title')].find((e) => e.textContent.trim() === l), label)
