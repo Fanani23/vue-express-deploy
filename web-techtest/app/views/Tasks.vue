@@ -78,7 +78,42 @@
           </div>
           <a-alert v-if="importResult" type="info" show-icon closable class="import-result" data-cy="import-result" :message="`Imported: ${importResult.created} new, ${importResult.updated} updated, ${importResult.skipped.length} skipped`" :description="importResult.skipped.length ? importResult.skipped.slice(0, 5).map((s) => `row ${s.row}: ${s.error}`).join(' · ') : ''" @close="importResult = null" />
 
+          <!-- phone width: one card per task and "load more" (the API's cursor), instead of a 4-column table -->
+          <template v-if="narrow">
+            <ul class="cards" data-cy="task-cards" aria-label="Tasks">
+              <li v-for="record in tasks" :key="record.id" class="card" :data-status="record.status">
+                <div class="card__head">
+                  <span class="task__mark" :data-status="record.status"><CheckOutlined v-if="record.status === 'Done'" /><ClockCircleOutlined v-else-if="record.status === 'InProgress'" /><BorderOutlined v-else /></span>
+                  <div class="task__text">
+                    <div class="task__title" :class="{ 'task__title--done': record.status === 'Done' }">{{ record.title }}</div>
+                    <div v-if="record.description" class="task__desc">{{ record.description }}</div>
+                  </div>
+                </div>
+                <div v-if="record.priority !== 'Normal' || record.dueAt || record.assigneeName || record.labels?.length" class="task__meta">
+                  <a-tag v-if="record.priority !== 'Normal'" :color="PRIORITY_COLOR[record.priority]" class="task__chip"><FlagOutlined /> {{ record.priority }}</a-tag>
+                  <a-tag v-if="record.dueAt" :color="isOverdue(record) ? 'error' : 'default'" class="task__chip"><CalendarOutlined /> {{ dueLabel(record.dueAt) }}</a-tag>
+                  <a-tag v-if="record.assigneeName" class="task__chip task__chip--who"><UserOutlined /> {{ record.assigneeName.replace(/@.*/, '') }}</a-tag>
+                  <a-tag v-for="l in record.labels || []" :key="l" class="task__chip task__chip--label"><TagsOutlined /> {{ l }}</a-tag>
+                </div>
+                <div class="card__foot">
+                  <a-select :value="record.status" size="small" class="card__status" :data-a11y-label="`Status of ${record.title}`" :options="statusOptions" @change="(s) => setStatus(record, s)" />
+                  <span class="task__when page__muted"><HistoryOutlined />{{ timeAgo(record.updatedAt) }}</span>
+                  <span class="card__tools">
+                    <a-button size="small" type="text" class="task__btn" :aria-label="`Move ${record.title} to ${STATUS_LABEL[NEXT_STATUS[record.status]]}`" @click="setStatus(record, NEXT_STATUS[record.status])"><template #icon><ArrowRightOutlined /></template></a-button>
+                    <a-button size="small" type="text" class="task__btn" :aria-label="`History of ${record.title}`" @click="history = record"><template #icon><HistoryOutlined /></template></a-button>
+                    <a-popconfirm title="Delete this task?" ok-text="Delete" ok-type="danger" @confirm="removeTask(record)"><a-button size="small" type="text" danger class="task__btn" :aria-label="`Delete ${record.title}`"><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
+                  </span>
+                </div>
+              </li>
+              <li v-if="!tasks.length && !loading" class="empty"><InboxOutlined class="empty__icon" /><span>{{ appliedSearch ? `No task matches “${appliedSearch}”` : 'No tasks here' }}</span></li>
+            </ul>
+            <div class="cards__more">
+              <span class="page__muted">{{ tasks.length }} of {{ total }}</span>
+              <a-button v-if="nextCursor" size="small" :loading="loading" data-cy="load-more" @click="loadMore">Load more</a-button>
+            </div>
+          </template>
           <a-table
+            v-else
             :data-source="tasks"
             :columns="columns"
             :loading="loading"
@@ -127,7 +162,7 @@
               <div class="empty"><InboxOutlined class="empty__icon" /><span>{{ appliedSearch ? `No task matches “${appliedSearch}”` : filter === 'all' ? 'No tasks yet' : `Nothing ${STATUS_LABEL[filter].toLowerCase()}` }}</span><span class="empty__hint">{{ appliedSearch ? 'The search runs on the server over title and description.' : filter === 'all' ? 'Add the first one above.' : 'Pick another filter or add a task.' }}</span></div>
             </template>
           </a-table>
-          <div v-if="total > 0" class="pager">
+          <div v-if="total > 0 && !narrow" class="pager">
             <span class="pager__info">Showing <strong>{{ rangeStart }}–{{ rangeEnd }}</strong> of <strong>{{ total }}</strong> · page {{ page }} of {{ pageCount }}</span>
             <div class="pager__controls">
               <a-select v-model:value="pageSize" size="small" class="pager__size" data-a11y-label="Rows per page" :options="[8, 16, 32].map((n) => ({ value: n, label: `${n} / page` }))" />
@@ -180,7 +215,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import HistoryDrawer from '../components/HistoryDrawer.vue'
 import { useCommands } from '../shortcuts.js'
@@ -278,16 +313,23 @@ const loadCounts = async () => {
 // "Next" continues from the last row shown (the API's keyset cursor), so a task created or moved by someone else
 // while you read never makes a row repeat or vanish between pages; jumping to a page number is by offset.
 const nextCursor = ref(null)
-const loadTasks = async (cursor = null) => {
+const loadTasks = async (cursor = null, { append = false } = {}) => {
   loading.value = true
   try {
     const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value, cursor, ...extra })
-    tasks.value = res.items
+    tasks.value = append ? [...tasks.value, ...res.items.filter((t) => !tasks.value.some((x) => x.id === t.id))] : res.items
     total.value = res.total
     nextCursor.value = res.nextCursor
-    if (res.items.length === 0 && page.value > 1) { page.value = 1; await loadTasks() }
+    if (res.items.length === 0 && page.value > 1 && !append) { page.value = 1; await loadTasks() }
   } catch (e) { fail(e) } finally { loading.value = false }
 }
+// phone width: cards + "load more" appends the next cursor page; a refresh (filter, change event) starts over
+const narrowQuery = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px)') : null
+const narrow = ref(!!narrowQuery?.matches)
+const onNarrow = (e) => { narrow.value = e.matches }
+narrowQuery?.addEventListener?.('change', onNarrow)
+onBeforeUnmount(() => narrowQuery?.removeEventListener?.('change', onNarrow))
+const loadMore = () => { page.value++; return loadTasks(nextCursor.value, { append: true }) }
 
 const refresh = () => Promise.all([loadCounts(), loadTasks(), loadOverdue()])
 
@@ -375,7 +417,9 @@ onMounted(async () => {
 useChangeFeed(() => refresh(), { resources: ['task'] })
 </script>
 
-<style src="../style/dashboard.css">.new-task__extra { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+<style src="../style/dashboard.css"></style>
+<!-- rules written inside a <style src> block are dropped by the SFC compiler; they live here (scoped: .card is also a kanban class) -->
+<style scoped>.new-task__extra { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
 .new-task__priority { width: 7rem; }
 .new-task__assignee { min-width: 12rem; flex: 1; }
 .new-task__labels { min-width: 12rem; flex: 1; }
@@ -389,6 +433,15 @@ useChangeFeed(() => refresh(), { resources: ['task'] })
 .task__chip { margin: 0; font-size: 0.72rem; line-height: 1.4; }
 .task__chip--label { background: var(--p-bg, #f5f5f5); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.card { border: 1px solid var(--p-border); border-radius: 12px; padding: 0.6rem 0.7rem; background: var(--p-card, transparent); display: grid; gap: 0.35rem; }
+.card[data-status="Done"] { opacity: 0.75; }
+.card__head { display: flex; gap: 0.5rem; align-items: flex-start; }
+.card__foot { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.card__status { width: 8.5rem; }
+.card__tools { margin-left: auto; display: inline-flex; }
+.cards__more { display: flex; justify-content: space-between; align-items: center; margin-top: 0.6rem; }
+.card .task__btn { min-width: 2.4rem; min-height: 2.4rem; }
 </style>
 <style scoped>
 .search { margin-bottom: 0.75rem; }
