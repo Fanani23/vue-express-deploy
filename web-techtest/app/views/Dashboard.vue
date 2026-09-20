@@ -50,7 +50,9 @@
                   <span class="member__avatar" :style="{ background: hue(m.email) }">{{ m.username.slice(0, 1).toUpperCase() }}</span>
                   <span class="member__name">{{ m.username }}<span v-if="m.id === myId" class="member__you"> (you)</span></span>
                   <span class="member__title">{{ m.revoked ? 'revoked' : m.roles.join(', ') || 'no role' }}</span>
+                  <a-tag v-if="m.lockedUntil" color="warning" class="member__locked" :title="'Locked until ' + new Date(m.lockedUntil).toLocaleTimeString()">locked</a-tag>
                   <span v-if="admin" class="member__tools">
+                    <a-tooltip v-if="m.lockedUntil" title="Unlock (too many wrong passwords)"><a-button size="small" type="text" data-cy="unlock" @click="unlockMember(m)"><template #icon><UnlockOutlined /></template></a-button></a-tooltip>
                     <a-tooltip title="Edit"><a-button size="small" type="text" @click="editMember(m)"><template #icon><EditOutlined /></template></a-button></a-tooltip>
                     <a-popconfirm v-if="m.id !== myId" title="Delete this account? Their session is revoked too." ok-text="Delete" ok-type="danger" @confirm="removeMember(m)"><a-button size="small" type="text" danger><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
                   </span>
@@ -157,7 +159,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Input, message } from 'ant-design-vue'
-import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
 import { tasksApi, catalogApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
 import { usersApi, ROLES, isAdmin } from '../users.js'
@@ -253,6 +255,7 @@ const editMember = (m) => twoFieldModal('Edit account', [{ key: 'username', valu
   try { await usersApi.update(m.id, { username: v.username.trim(), roles: v.roles }); await loadMembers() } catch (e) { fail(e) }
 })
 const removeMember = async (m) => { try { await usersApi.remove(m.id); await loadMembers() } catch (e) { fail(e) } }
+const unlockMember = async (m) => { try { await usersApi.update(m.id, { unlock: true }); message.success(`${m.username} unlocked`); await loadMembers() } catch (e) { fail(e) } }
 
 const validUrl = (u) => /^(https?:\/\/|\/)/.test((u || '').trim())
 const linkHref = (l) => l.attributes?.url || '#'
@@ -318,6 +321,7 @@ useChangeFeed(() => loadAll())
 .member__tools { position: absolute; top: 0.25rem; right: 0.25rem; display: flex; opacity: 0; transition: opacity 0.15s; }
 .member:hover .member__tools, .member:focus-within .member__tools { opacity: 1; }
 .member--revoked { opacity: 0.55; }
+.member__locked { margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.4; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }
 .inline-add--users { grid-template-columns: 1.4fr 1fr auto auto; }

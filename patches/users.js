@@ -5,13 +5,14 @@
 //   GET    /api/users/me       any signed-in user   the caller's own row
 //   POST   /api/users          Admin                { email, username?, roles?, password?, otpPin? }
 //                                                   201 { user, temporaryPassword? } - the password is shown once
-//   PUT    /api/users/:id      Admin                { username?, roles?, revoked? } - not your own Admin role/revoke
+//   PUT    /api/users/:id      Admin                { username?, roles?, revoked?, unlock? } - not your own Admin role/revoke
 //   DELETE /api/users/:id      Admin                not yourself; the refresh token is revoked too
 import crypto from 'node:crypto';
 import express from 'express';
 import { authFns, authUser } from '@common/node/auth';
 import { setScryptHash } from '@common/node/auth/scrypt';
 import * as s from '@common/node/services';
+import { clearLockout, lockedUntil } from '@common/node/auth/keyv';
 
 const TABLE = process.env.AUTH_USER_STORE_NAME || 'users';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -38,9 +39,12 @@ const parseRoles = input => {
 };
 const adminOnly = (req, res, next) => (isAdmin(req) ? next() : res.status(403).json({ message: 'Admin role required' }));
 
+// `lockedUntil` comes from the session store (patch 0019), one lookup per account.
+const withLock = async row => ({ ...toPublic(row), lockedUntil: await lockedUntil(row.id).then(u => (u ? new Date(u).toISOString() : null)) });
+
 const list = async (req, res) => {
   const rows = await knex()(TABLE).select(PUBLIC).orderBy('id');
-  return res.status(200).json(rows.map(toPublic));
+  return res.status(200).json(await Promise.all(rows.map(withLock)));
 };
 
 const me = async (req, res) => {
@@ -110,11 +114,14 @@ const update = async (req, res) => {
     if (self && req.body.revoked) return res.status(400).json({ message: 'You cannot revoke yourself' });
     patch.revoked = req.body.revoked ? new Date().toISOString() : '';
   }
-  if (Object.keys(patch).length === 0) return res.status(400).json({ message: 'Nothing to update' });
+  let unlocked = false;
+  if (req.body?.unlock) { await clearLockout(id); unlocked = true; }
+  if (Object.keys(patch).length === 0 && !unlocked) return res.status(400).json({ message: 'Nothing to update' });
+  if (Object.keys(patch).length === 0) return res.status(200).json(await withLock(row));
   await knex()(TABLE).where({ id }).update(patch);
   if (patch.revoked) await authFns.revokeRefreshToken(String(id)); // a revoked account cannot refresh its session
   const updated = await knex()(TABLE).select(PUBLIC).where({ id }).first();
-  return res.status(200).json(toPublic(updated));
+  return res.status(200).json(await withLock(updated));
 };
 
 const remove = async (req, res) => {
