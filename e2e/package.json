@@ -1,0 +1,14 @@
+{
+  "name": "web-techtest-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Headless-browser checks for the Vue + Express portal and its TaskPulse integration",
+  "scripts": {
+    "e2e": "bash run.sh",
+    "a11y": "node tests/a11y.mjs"
+  },
+  "dependencies": {
+    "@axe-core/puppeteer": "^4.10.0",
+    "puppeteer-core": "^24.0.0"
+  }
+}

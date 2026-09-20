@@ -3,3 +3,5 @@ vue-antd-template/
 express-template/
 node_modules/
 .vercel/
+e2e/node_modules/
+e2e/package-lock.json

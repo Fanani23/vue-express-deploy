@@ -44,3 +44,29 @@
 .empty__hint { font-size: 0.78rem; }
 .pill { display: inline-flex; align-items: center; gap: 0.4rem; margin: 0; padding: 0.25rem 0.7rem; border-radius: 999px; font-weight: 500; }
 .pill .anticon { margin-right: 0.1rem; }
+
+/* Colour contrast (WCAG AA, 4.5:1): Ant Design's coloured tags and the small primary button sit just under the
+   threshold on white; darker foregrounds keep the palette and pass axe-core. */
+.shell__content .ant-tag-success, .shell__content .ant-tag-green { color: #166534; }
+.shell__content .ant-tag-processing, .shell__content .ant-tag-blue { color: #1e40af; }
+.shell__content .ant-tag-gold, .shell__content .ant-tag-orange { color: #92400e; }
+.shell__content .ant-tag-error, .shell__content .ant-tag-red { color: #991b1b; }
+.shell__content .ant-tag-purple { color: #6b21a8; }
+.shell__content .ant-tag-warning { color: #92400e; }
+:root[data-theme="dark"] .shell__content .ant-tag-success, :root[data-theme="dark"] .shell__content .ant-tag-green { color: #86efac; }
+:root[data-theme="dark"] .shell__content .ant-tag-processing, :root[data-theme="dark"] .shell__content .ant-tag-blue { color: #93c5fd; }
+:root[data-theme="dark"] .shell__content .ant-tag-gold, :root[data-theme="dark"] .shell__content .ant-tag-orange, :root[data-theme="dark"] .shell__content .ant-tag-warning { color: #fcd34d; }
+:root[data-theme="dark"] .shell__content .ant-tag-error, :root[data-theme="dark"] .shell__content .ant-tag-red { color: #fca5a5; }
+:root[data-theme="dark"] .shell__content .ant-tag-purple { color: #d8b4fe; }
+.shell__content .ant-btn-primary:not(:disabled) { background: #1d4ed8; }
+.shell__content .ant-btn-primary:not(:disabled):hover { background: #1e40af; }
+:root[data-theme="dark"] .shell__content .ant-btn-primary:not(:disabled) { background: #2563eb; }
+.shell__content .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled) { color: #b91c1c; border-color: #b91c1c; }
+.shell__content .ant-btn-dangerous.ant-btn-text:not(:disabled) { border-color: transparent; }
+:root[data-theme="dark"] .shell__content .ant-btn-dangerous:not(.ant-btn-primary):not(:disabled) { color: #fca5a5; border-color: #fca5a5; }
+.shell__content .ant-select-selection-placeholder, .shell__content input::placeholder { color: #5f6672; opacity: 1; }
+.shell__content .ant-upload-drag .ant-upload-hint { color: #4b5563 !important; }
+:root[data-theme="dark"] .shell__content .ant-upload-drag .ant-upload-hint { color: #9aa3b0 !important; }
+:root[data-theme="dark"] .shell__content .ant-select-selection-placeholder, :root[data-theme="dark"] .shell__content .ant-upload-hint, :root[data-theme="dark"] .shell__content input::placeholder { color: #9aa3b0; }
+.page__note a, .page__muted a, .empty a { text-decoration: underline; text-underline-offset: 2px; color: #1d4ed8; }
+:root[data-theme="dark"] .page__note a, :root[data-theme="dark"] .page__muted a, :root[data-theme="dark"] .empty a { color: #93c5fd; }

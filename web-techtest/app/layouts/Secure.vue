@@ -58,6 +58,7 @@ import { onLogin, onLogout } from '../setups/events.js'
 import { useTheme } from '../theme.js'
 import { preferencesApi, userKey } from '../taskpulse.js'
 import { session, IDLE_LIMIT_SECONDS } from '../session.js'
+import { watchA11y } from '../a11y.js'
 
 if (!idleTimer._touchWrapped) {
   const originalReset = idleTimer.reset.bind(idleTimer)
@@ -112,8 +113,10 @@ const applyServerPreferences = async () => {
   } catch { }
 }
 
+let stopA11y = null
 onMounted(async () => {
   applyServerPreferences()
+  stopA11y = watchA11y()
   idleTimer.timeouts.length = 0
   idleTimer.timeouts.push({ time: IDLE_LIMIT_SECONDS, fn: () => store.doLogin({ forced: true, reason: 'idle' }), stop: true })
   idleTimer.reset()
@@ -142,6 +145,7 @@ onMounted(async () => {
 })
 onUnmounted(() => {})
 onBeforeUnmount(() => {
+  stopA11y?.()
   idleTimer.stop()
   onLogout && onLogout()
 })

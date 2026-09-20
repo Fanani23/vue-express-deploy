@@ -77,7 +77,7 @@
                 </div>
               </template>
               <template v-else-if="column.key === 'status'">
-                <a-select :value="record.status" size="small" class="task__status" :options="statusOptions" :bordered="false" @change="(s) => setStatus(record, s)" />
+                <a-select :value="record.status" size="small" class="task__status" :data-a11y-label="`Status of ${record.title}`" :options="statusOptions" :bordered="false" @change="(s) => setStatus(record, s)" />
               </template>
               <template v-else-if="column.key === 'updated'">
                 <a-tooltip :title="new Date(record.updatedAt).toLocaleString()"><span class="task__when"><HistoryOutlined />{{ timeAgo(record.updatedAt) }}</span></a-tooltip>
@@ -100,7 +100,7 @@
           <div v-if="total > 0" class="pager">
             <span class="pager__info">Showing <strong>{{ rangeStart }}–{{ rangeEnd }}</strong> of <strong>{{ total }}</strong> · page {{ page }} of {{ pageCount }}</span>
             <div class="pager__controls">
-              <a-select v-model:value="pageSize" size="small" class="pager__size" :options="[8, 16, 32].map((n) => ({ value: n, label: `${n} / page` }))" />
+              <a-select v-model:value="pageSize" size="small" class="pager__size" data-a11y-label="Rows per page" :options="[8, 16, 32].map((n) => ({ value: n, label: `${n} / page` }))" />
               <a-tooltip title="First page"><a-button size="small" :disabled="page <= 1" @click="goTo(1)"><template #icon><DoubleLeftOutlined /></template></a-button></a-tooltip>
               <a-tooltip title="Previous"><a-button size="small" :disabled="page <= 1" @click="goTo(page - 1)"><template #icon><LeftOutlined /></template></a-button></a-tooltip>
               <button v-for="n in pageItems" :key="n" type="button" class="pager__page" :class="{ 'pager__page--on': n === page }" @click="goTo(n)">{{ n }}</button>

@@ -143,7 +143,7 @@ useChangeFeed(() => load(), { resources: ['task'] })
 .card__title { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .card__title--done { text-decoration: line-through; color: var(--p-muted); font-weight: 500; }
 .card__desc { margin: 0; font-size: 0.85rem; color: var(--p-muted); white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; flex: 1; }
-.card__desc--none { font-style: italic; opacity: 0.7; }
+.card__desc--none { font-style: italic; }
 .card__meta { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--p-muted); }
 .card__meta code { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .card__actions { display: flex; align-items: center; gap: 0.15rem; border-top: 1px solid var(--p-border); margin: 0.2rem -1rem 0; padding: 0.35rem 0.6rem 0; }

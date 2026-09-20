@@ -109,6 +109,6 @@ onBeforeUnmount(() => { chart1?.destroy(); chart2?.destroy() })
 .chart-types { display: inline-flex; background: var(--p-card); border: 1px solid var(--p-border); border-radius: 10px; padding: 0.2rem; gap: 0.15rem; }
 .chart-type { appearance: none; border: 0; background: transparent; color: var(--p-muted); border-radius: 8px; padding: 0.3rem 0.65rem; font: inherit; font-size: 0.82rem; cursor: pointer; display: inline-flex; align-items: center; gap: 0.35rem; transition: background 0.15s, color 0.15s; }
 .chart-type:hover { color: var(--p-text); background: var(--p-bg); }
-.chart-type--on { background: var(--p-accent); color: #fff; }
+.chart-type--on { background: #1d4ed8; color: #fff; }
 .chart-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); }
 </style>

@@ -27,7 +27,7 @@
         <div class="page__card session">
           <div class="sec"><span class="sec__icon"><ClockCircleOutlined /></span><h3 class="sec__title">Session</h3><span class="sec__count">{{ lifetimeMin }} min token</span></div>
           <div class="session__ring">
-            <a-progress type="dashboard" :percent="percentLeft" :stroke-color="ringColor" :size="150" :format="() => remainingShort" />
+            <a-progress type="dashboard" :percent="percentLeft" :stroke-color="ringColor" :size="150" :format="() => remainingShort" data-a11y-label="Access token time left" />
             <div class="session__caption">{{ remainingLong }}</div>
           </div>
           <a-alert v-if="secondsLeft > 0 && secondsLeft < 300" type="warning" show-icon message="Less than five minutes left — renew, or the next API call will refresh it for you." class="session__warn" />
@@ -274,9 +274,12 @@ onBeforeUnmount(() => clearInterval(tick))
 .pref__label { font-weight: 600; margin-bottom: 0.4rem; }
 .jwt { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
 .jwt__parts { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; padding: 0.55rem 0.7rem; background: var(--p-bg); border: 1px solid var(--p-border); border-radius: 8px; overflow-wrap: anywhere; line-height: 1.5; }
-.jwt__part--h { color: #dc2626; }
-.jwt__part--p { color: #7c3aed; }
-.jwt__part--s { color: #2563eb; }
+.jwt__part--h { color: #b91c1c; }
+.jwt__part--p { color: #6d28d9; }
+.jwt__part--s { color: #1d4ed8; }
+:root[data-theme="dark"] .jwt__part--h { color: #fca5a5; }
+:root[data-theme="dark"] .jwt__part--p { color: #c4b5fd; }
+:root[data-theme="dark"] .jwt__part--s { color: #93c5fd; }
 .jwt__dot { color: var(--p-muted); margin: 0 0.1rem; }
 .jwt__legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; font-size: 0.78rem; color: var(--p-muted); margin-bottom: 1rem; align-items: center; }
 .jwt__legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
@@ -291,9 +294,10 @@ onBeforeUnmount(() => clearInterval(tick))
 .claim--empty .claim__icon { background: var(--p-card); color: var(--p-muted); }
 .claim__body { min-width: 0; display: grid; gap: 0.2rem; }
 .claim__head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+:root[data-theme="dark"] .claim__badge[data-tone="ok"] { color: #86efac; }
 .claim__name { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem; font-weight: 700; color: var(--p-text); }
 .claim__badge { font-size: 0.7rem; font-weight: 600; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--p-card); border: 1px solid var(--p-border); color: var(--p-muted); font-variant-numeric: tabular-nums; }
-.claim__badge[data-tone="ok"] { color: #16a34a; border-color: #16a34a55; }
+.claim__badge[data-tone="ok"] { color: #15803d; border-color: #16a34a55; }
 .claim__badge[data-tone="warn"] { color: #f59e0b; border-color: #f59e0b55; }
 .claim__badge[data-tone="bad"] { color: #ef4444; border-color: #ef444455; }
 .claim__value { font-size: 0.92rem; font-weight: 500; overflow-wrap: anywhere; display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; align-items: center; }
