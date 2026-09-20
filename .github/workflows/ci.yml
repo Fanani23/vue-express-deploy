@@ -1,0 +1,61 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The kit never contains es-labs code. CI proves the same thing the VM bootstrap does: clone the two
+# templates at their pinned commits, apply the patches and the overlay, and everything still builds.
+jobs:
+  patches-and-frontend:
+    runs-on: ubuntu-latest
+    env:
+      EXPRESS_TEMPLATE_COMMIT: db883cd
+      VUE_TEMPLATE_COMMIT: 99a34fa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Shell scripts are valid and LF
+        run: |
+          for f in kit/patches/apply.sh kit/web-techtest/apply.sh kit/cloud/bootstrap.sh; do bash -n "$f"; done
+          ! grep -rl $'\r' kit --include='*.sh' --include='*.service' --include='*.js' --include='*.mjs' --include='*.vue'
+
+      - name: Clone es-labs/express-template at the pinned commit
+        run: |
+          git clone -q https://github.com/es-labs/express-template.git
+          git -C express-template checkout -q "$EXPRESS_TEMPLATE_COMMIT"
+      - name: Apply backend patches (idempotent, must not conflict)
+        run: |
+          bash kit/patches/apply.sh "$PWD/express-template"
+          bash kit/patches/apply.sh "$PWD/express-template" | grep -c already
+          cd express-template && npm i --no-audit --no-fund --loglevel=error && node --check apps/sample-api/src/routes/auth.js
+      - name: Backend migrations run on PGlite (api_role, kit migration)
+        run: |
+          cd express-template/scripts/dbdeploy && npm i --no-audit --no-fund --loglevel=error
+          node --input-type=module -e "import {PGlite} from '@electric-sql/pglite'; const db=new PGlite('./db-sample/dev.db'); await db.exec(\"DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='api_role') THEN CREATE ROLE api_role; END IF; END \$\$\"); await db.close();"
+          cp "$GITHUB_WORKSPACE"/kit/migrations/*.js db-sample/migrations/
+          npx knex --knexfile db-sample/knexfile.js migrate:latest | tail -2
+
+      - name: Clone es-labs/vue-antd-template at the pinned commit
+        run: |
+          git clone -q https://github.com/es-labs/vue-antd-template.git
+          git -C vue-antd-template checkout -q "$VUE_TEMPLATE_COMMIT"
+          cd vue-antd-template && npm i --no-audit --no-fund --loglevel=error && cd apps && npm i --no-audit --no-fund --loglevel=error
+      - name: Apply the web-techtest overlay and build for production
+        run: |
+          bash kit/web-techtest/apply.sh "$PWD/vue-antd-template"
+          cd vue-antd-template/apps
+          printf 'VITE_SENTRY_DSN=\nVITE_API_URL=\nVITE_WITH_CREDENTIALS=same-origin\nVITE_WS_URL=\nVITE_WS_MS=5000\nBASE_PATH=/\nVITE_REFRESH_URL=/api/auth/refresh\nVITE_LOGOUT_URL=/api/auth/logout\nVITE_TASKPULSE_URL=https://taskpulse.example\n' > web-techtest/envs/.env.cloud
+          npx vite build --config web-techtest/vite.config.js --mode cloud --logLevel error
+          test -f web-techtest/dist/index.html
+          grep -q "taskpulse.example" web-techtest/dist/assets/taskpulse-*.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-techtest-dist
+          path: vue-antd-template/apps/web-techtest/dist
