@@ -164,6 +164,14 @@ EOF
   chmod 0600 /etc/vt/api.env
 fi
 sed -i "s/^USE_OTP=.*/USE_OTP=${USE_OTP:-EMAIL} # EMAIL (code by mail), GA (authenticator app), TEST (111111)/" "$VT_HOME/express-template/apps/sample-api/.env"
+# The template ships a 9-character JWT_SECRET. Replace a weak one with 48 random characters, once - TaskPulse verifies
+# the same tokens and refuses secrets under 16 characters.
+if [[ $(sed -n 's/^JWT_SECRET=//p' "$VT_HOME/express-template/apps/sample-api/.env" | head -1 | wc -c) -lt 33 ]]; then
+  NEW_JWT_SECRET="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 48)"
+  as_vt sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$NEW_JWT_SECRET|" "$VT_HOME/express-template/apps/sample-api/.env"
+  echo "  JWT_SECRET replaced with a random 48-character value"
+fi
+JWT_SECRET_VALUE="$(sed -n 's/^JWT_SECRET=//p' "$VT_HOME/express-template/apps/sample-api/.env" | head -1)"
 systemctl daemon-reload
 systemctl enable --now vt-db vt-api >/dev/null
 systemctl restart vt-db vt-api
@@ -202,7 +210,7 @@ ln -sf /etc/nginx/sites-available/vue-express.conf /etc/nginx/sites-enabled/vue-
 
 log "TaskPulse: scripts/install.sh (PostgreSQL roles, publish, hardened units, nginx :8088)"
 chmod +x "$ROOT/taskpulse/scripts/"*.sh
-if ! SUDO_USER="${SUDO_USER:-root}" TASKPULSE_ALLOWED_ORIGINS="$WEB_ORIGIN" bash "$ROOT/taskpulse/scripts/install.sh"; then
+if ! SUDO_USER="${SUDO_USER:-root}" TASKPULSE_ALLOWED_ORIGINS="$WEB_ORIGIN" TASKPULSE_JWT_SECRET="$JWT_SECRET_VALUE" bash "$ROOT/taskpulse/scripts/install.sh"; then
   echo "TaskPulse install.sh failed - see output above" >&2; exit 1
 fi
 log "TaskPulse: sample tasks through the API (scripts/seed.sh, skipped when the table is not empty)"
