@@ -22,6 +22,34 @@ commits validated in the setup notes:
 | `e2e/` | browser end-to-end checks with puppeteer-core + axe-core against a running stack (`e2e/run.sh`, `E2E_BASE` / `E2E_TASKPULSE` for the public URLs): every page renders without errors, session survives a reload and idle sign-out, dashboard numbers match the API, a second tab follows change events, optimistic delete, and a WCAG 2.1 AA axe audit of each page in light and dark |
 | `cloud/bootstrap.sh` | one-shot install of **both** technical-test parts on a fresh Ubuntu VM behind nginx — expects to live in `<submission>/code/vue-express-deploy/cloud` next to `code/taskpulse` |
 
+## Architecture
+
+```mermaid
+flowchart LR
+    B[Browser]
+    N[nginx :80/:443<br/>SPA + /api proxy<br/>security headers · immutable assets · no-cache HTML]
+    F[Vite build<br/>web-techtest overlay on vue-antd-template]
+    E[express-template :3000<br/>+ 12 patches]
+    D[(PGlite :5432<br/>users · rbac · otp_pin)]
+    K[(Redis :6379<br/>sessions, one-time codes)]
+    M[SMTP<br/>one-time codes by email]
+    G[Google OAuth]
+    T[TaskPulse :8088<br/>REST + WebSocket, part B]
+
+    B -- "HTML/JS" --> N --> F
+    B -- "/api/auth/* · HttpOnly refresh cookie" --> N --> E
+    E --> D
+    E -- "keyv" --> K
+    E -- "codes" --> M
+    E -- "sign-in" --> G
+    B -- "Bearer access token / socket auth" --> T
+    E -. "same JWT_SECRET" .-> T
+```
+
+The templates are cloned untouched at deploy time; `patches/apply.sh` and `web-techtest/apply.sh` produce the running
+app from them. The access token express signs is the only credential the browser holds; TaskPulse validates it with the
+same secret, so one sign-in covers both parts.
+
 ## Configuration
 
 The API reads secrets from the environment only (`systemd/vt-api.service` loads a root-only
