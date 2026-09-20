@@ -33,7 +33,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
-import { tasksApi, STATUSES, STATUS_LABEL } from '../../taskpulse.js'
+import { tasksApi, STATUSES, STATUS_LABEL, useChangeFeed } from '../../taskpulse.js'
 import { DatabaseOutlined, ReloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, RadarChartOutlined, CalendarOutlined } from '@ant-design/icons-vue'
 import { useTheme } from '../../theme.js'
 
@@ -99,6 +99,7 @@ const draw = () => {
 
 watch([stats, type, isDark], () => nextTick(draw))
 onMounted(load)
+useChangeFeed(() => load(), { resources: ['task'] })
 onBeforeUnmount(() => { chart1?.destroy(); chart2?.destroy() })
 </script>
 

@@ -89,7 +89,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
 import { AimOutlined, EnvironmentOutlined, FullscreenOutlined, GlobalOutlined, PushpinOutlined, UserOutlined, CloudServerOutlined, SwapOutlined, PlusCircleOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons-vue'
-import { catalogApi } from '../../taskpulse.js'
+import { catalogApi, useChangeFeed } from '../../taskpulse.js'
 
 delete L.Icon.Default.prototype._getIconUrl
 L.Icon.Default.mergeOptions({ iconUrl: markerIcon, iconRetinaUrl: markerIcon2x, shadowUrl: markerShadow })
@@ -175,6 +175,7 @@ onMounted(async () => {
   fit()
 })
 onBeforeUnmount(() => { map?.remove() })
+useChangeFeed(() => load(), { resources: ['catalog'] })
 </script>
 
 <style scoped>

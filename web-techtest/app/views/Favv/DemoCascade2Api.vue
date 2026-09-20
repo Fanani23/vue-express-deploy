@@ -93,7 +93,7 @@
 <script setup>
 import { ref, computed, reactive } from 'vue'
 import { ApiOutlined, ClearOutlined, FilterOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, UnorderedListOutlined, SearchOutlined, FileSearchOutlined, RightOutlined, FileTextOutlined, LoadingOutlined, HistoryOutlined } from '@ant-design/icons-vue'
-import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR } from '../../taskpulse.js'
+import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR, useChangeFeed } from '../../taskpulse.js'
 
 const api = tasksApi.urls.api
 const statuses = ref([])
@@ -140,6 +140,7 @@ const selectTask = async (id) => {
   } catch (e) { error.value = e.message } finally { loadingTask.value = false }
 }
 const clearAll = () => { statuses.value = []; tasks.value = []; taskId.value = ''; task.value = null; query.value = ''; for (const k of Object.keys(counts)) delete counts[k] }
+useChangeFeed(() => { if (statuses.value.length) loadTasks() }, { resources: ['task'] })
 </script>
 
 <style scoped>

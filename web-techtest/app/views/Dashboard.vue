@@ -156,7 +156,7 @@ import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Input, message } from 'ant-design-vue'
 import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
-import { tasksApi, catalogApi, timeAgo, STATUS_LABEL } from '../taskpulse.js'
+import { tasksApi, catalogApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
 
 const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', members: '/dashboard', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
 
@@ -264,6 +264,7 @@ const advanceOldest = async (status) => {
 }
 
 onMounted(loadAll)
+useChangeFeed(() => loadAll())
 </script>
 
 <style scoped>

@@ -132,7 +132,7 @@ import { http } from '../../common/plugins/fetch.js'
 import { useTheme } from '../theme.js'
 import { preferencesApi, userKey, timeAgo } from '../taskpulse.js'
 import idleTimer from '@es-labs/jslib/web/idle'
-import { IDLE_LIMIT_SECONDS } from '../session.js'
+import { IDLE_LIMIT_SECONDS, refreshTokens } from '../session.js'
 
 const store = useMainStore()
 const theme = useTheme()
@@ -220,8 +220,7 @@ const copy = async (text, what) => {
 const renew = async () => {
   renewing.value = true
   try {
-    const { data } = await http.post('/api/auth/refresh', { refresh_token: http.getTokens().refresh, access_token: http.getTokens().access })
-    http.setTokens({ access: data.access_token, refresh: data.refresh_token })
+    const data = await refreshTokens()
     store.updateUser({ ...parseJwt(data.access_token), user_meta: data.user_meta || user.value.user_meta })
     renewedTimes.value++
     message.success('Session renewed — new access and refresh tokens')

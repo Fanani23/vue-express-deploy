@@ -69,7 +69,7 @@ import '@es-labs/jslib/web/web-cam'
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { VideoCameraOutlined, PictureOutlined, CameraOutlined, DeleteOutlined, DownloadOutlined, ClockCircleOutlined, CloudUploadOutlined, CloudServerOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { uploadsApi, dataUrlToFile, formatBytes, timeAgo } from '../../taskpulse.js'
+import { uploadsApi, dataUrlToFile, formatBytes, timeAgo, useChangeFeed } from '../../taskpulse.js'
 
 const shots = ref([])
 const saved = ref([])
@@ -79,6 +79,7 @@ const save = async (s, i) => {
   try { await uploadsApi.create({ files: [dataUrlToFile(s.src, `photo-${new Date(s.at).toISOString().replace(/[:.]/g, '-')}.png`)], source: 'webcam' }); message.success('Photo saved on the server'); shots.value.splice(i, 1); await loadSaved() } catch (e) { message.error(e.message) } finally { s.saving = false }
 }
 const removeSaved = async (u) => { try { await uploadsApi.remove(u.id); await loadSaved() } catch (e) { message.error(e.message) } }
+useChangeFeed(() => loadSaved(), { resources: ['upload'] })
 const frame = ref(null)
 const size = reactive({ w: 480, h: 360 })
 const supported = !!navigator.mediaDevices?.getUserMedia

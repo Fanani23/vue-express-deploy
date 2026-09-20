@@ -144,7 +144,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { InboxOutlined, FormOutlined, CloudUploadOutlined, FontSizeOutlined, FileZipOutlined, FileImageOutlined, FilePdfOutlined, FileTextOutlined, TagOutlined, SendOutlined, ClearOutlined, SwapOutlined, ThunderboltOutlined, MessageOutlined, WarningOutlined, StopOutlined, QuestionCircleOutlined, DeleteOutlined, EditOutlined, DatabaseOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { useAppStore } from '../../store.js'
-import { useTaskPulseSocket, catalogApi, uploadsApi, formatBytes, timeAgo } from '../../taskpulse.js'
+import { useTaskPulseSocket, useChangeFeed, catalogApi, uploadsApi, formatBytes, timeAgo } from '../../taskpulse.js'
 
 const appStore = useAppStore()
 const router = useRouter()
@@ -232,6 +232,7 @@ const wsMsg = ref('')
 const onWsMsg = () => { if (wsMsg.value && ws.isOpen.value) { ws.echo(wsMsg.value); wsMsg.value = '' } }
 
 onMounted(() => Promise.all([loadOptions(), loadUploads(), loadTags()]))
+useChangeFeed((msg) => (msg.resource === 'upload' ? loadUploads() : Promise.all([loadOptions(), loadTags()])), { resources: ['catalog', 'upload'] })
 </script>
 
 <style scoped>

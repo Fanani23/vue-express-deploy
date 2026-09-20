@@ -152,7 +152,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined, SearchOutlined } from '@ant-design/icons-vue'
-import { tasksApi, useTaskPulseSocket, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
+import { tasksApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
 
 const api = tasksApi.urls.api
 const apiReady = ref(null)
@@ -240,21 +240,36 @@ const createTask = async () => {
   } catch (e) { fail(e) } finally { creating.value = false }
 }
 
+// Optimistic: the row changes on screen at once and the counts follow; the server answer is applied on top,
+// and a failure puts the previous state back with the error shown.
+const bump = (from, to) => { if (!counts.value) return; if (from) counts.value[from] = Math.max(0, counts.value[from] - 1); if (to) counts.value[to] = (counts.value[to] || 0) + 1 }
 const setStatus = async (record, status) => {
   if (status === record.status) return
+  const previous = record.status
+  const row = tasks.value.find((t) => t.id === record.id)
+  if (row) { row.status = status; row.updatedAt = new Date().toISOString() }
+  bump(previous, status)
+  if (filter.value !== 'all' && filter.value !== status) tasks.value = tasks.value.filter((t) => t.id !== record.id)
   try {
     const task = await tasksApi.update(record.id, { title: record.title, description: record.description, status })
-    await refresh()
+    if (row) Object.assign(row, task)
     announce(status === 'Done' ? 'done' : 'moved', task)
+    loadCounts()
   } catch (e) { fail(e); await refresh() }
 }
 
 const removeTask = async (record) => {
+  const index = tasks.value.findIndex((t) => t.id === record.id)
+  const snapshot = tasks.value.slice()
+  if (index >= 0) tasks.value.splice(index, 1)
+  total.value = Math.max(0, total.value - 1)
+  bump(record.status, null)
+  if (counts.value) counts.value.total = Math.max(0, counts.value.total - 1)
   try {
     await tasksApi.remove(record.id)
-    await refresh()
     announce('deleted', record)
-  } catch (e) { fail(e) }
+    if (!tasks.value.length && page.value > 1) { page.value--; await loadTasks() }
+  } catch (e) { tasks.value = snapshot; fail(e); await refresh() }
 }
 
 const ws = useTaskPulseSocket({
@@ -273,6 +288,7 @@ onMounted(async () => {
   apiReady.value = await tasksApi.ready()
   await refresh()
 })
+useChangeFeed(() => refresh(), { resources: ['task'] })
 </script>
 
 <style src="../style/dashboard.css"></style>

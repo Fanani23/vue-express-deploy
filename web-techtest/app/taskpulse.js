@@ -1,4 +1,6 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { http } from '../common/plugins/fetch.js'
+import { refreshTokens } from './session.js'
 
 const API = (import.meta.env.VITE_TASKPULSE_URL || 'http://127.0.0.1:8088').replace(/\/$/, '')
 const WS = import.meta.env.VITE_TASKPULSE_WS_URL || API.replace(/^http/, 'ws') + '/ws'
@@ -8,11 +10,18 @@ export const STATUS_LABEL = { Todo: 'To do', InProgress: 'In progress', Done: 'D
 export const STATUS_COLOR = { Todo: 'default', InProgress: 'processing', Done: 'success' }
 export const NEXT_STATUS = { Todo: 'InProgress', InProgress: 'Done', Done: 'Todo' }
 
+const bearer = () => { const t = http.getTokens?.().access; return t ? { Authorization: `Bearer ${t}` } : {} }
+
+// Every call carries the part-A access token; a 401 triggers one refresh (through the express refresh endpoint)
+// and one retry, so an expired token never surfaces as an error while the refresh token is still good.
+const send = (path, options, headers) => fetch(API + path, { ...options, headers: { ...headers, ...bearer(), ...(options.headers || {}) } })
+
 const request = async (path, options = {}) => {
-  const res = await fetch(API + path, {
-    ...options,
-    headers: { Accept: 'application/json', ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) },
-  })
+  const headers = { Accept: 'application/json', ...(options.body && !(options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}) }
+  let res = await send(path, options, headers)
+  if (res.status === 401 && http.getTokens?.().access) {
+    try { await refreshTokens(); res = await send(path, options, headers) } catch { }
+  }
   if (res.status === 204) return null
   const body = await res.json().catch(() => null)
   if (!res.ok) {
@@ -91,10 +100,7 @@ export const uploadsApi = {
     for (const f of files) form.append('files', f, f.name)
     if (source) form.append('source', source)
     if (note) form.append('note', note)
-    const res = await fetch(`${API}/api/uploads`, { method: 'POST', body: form, headers: { Accept: 'application/json' } })
-    const body = await res.json().catch(() => null)
-    if (!res.ok) throw new Error(body?.detail ? `${body.title} (${body.detail})` : body?.title || `${res.status} ${res.statusText}`)
-    return body
+    return request('/api/uploads', { method: 'POST', body: form })
   },
   remove: (id) => request(`/api/uploads/${id}`, { method: 'DELETE' }),
   contentUrl: (id) => `${API}/api/uploads/${id}/content`,
@@ -123,88 +129,147 @@ export const timeAgo = (iso) => {
   return `${Math.round(h / 24)} d ago`
 }
 
+// One WebSocket per browser tab, shared by every page that wants the feed or change notifications.
+// Reconnects with exponential backoff and jitter (1 s → 30 s) and resets the delay after a successful open.
+const bus = {
+  socket: null,
+  state: ref('idle'),
+  connectionId: ref(''),
+  connections: ref(0),
+  attempt: 0,
+  timer: null,
+  listeners: new Set(),
+}
+const BACKOFF_BASE_MS = 1000
+const BACKOFF_MAX_MS = 30000
+
+const nextDelay = () => {
+  const exp = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** bus.attempt)
+  bus.attempt = Math.min(bus.attempt + 1, 10)
+  return Math.round(exp / 2 + Math.random() * exp / 2)
+}
+
+const emit = (msg) => { for (const fn of bus.listeners) { try { fn(msg) } catch { } } }
+
+const connectBus = () => {
+  if (bus.socket && (bus.socket.readyState === WebSocket.OPEN || bus.socket.readyState === WebSocket.CONNECTING)) return
+  clearTimeout(bus.timer)
+  bus.state.value = 'connecting'
+  const socket = new WebSocket(WS)
+  bus.socket = socket
+  socket.onopen = () => { bus.state.value = 'open'; bus.attempt = 0 }
+  socket.onerror = () => { bus.state.value = 'error' }
+  socket.onclose = (ev) => {
+    bus.state.value = 'closed'
+    bus.connections.value = 0
+    emit({ type: '_closed', code: ev.code, reason: ev.reason })
+    if (bus.listeners.size) {
+      const delay = nextDelay()
+      emit({ type: '_retry', delayMs: delay })
+      bus.timer = setTimeout(connectBus, delay)
+    }
+  }
+  socket.onmessage = (ev) => {
+    let msg
+    try { msg = JSON.parse(ev.data) } catch { return emit({ type: '_raw', data: ev.data }) }
+    if (msg.connections != null) bus.connections.value = msg.connections
+    if (msg.type === 'welcome') bus.connectionId.value = msg.connectionId
+    emit(msg)
+  }
+}
+
+export const subscribeSocket = (fn) => {
+  bus.listeners.add(fn)
+  connectBus()
+  return () => {
+    bus.listeners.delete(fn)
+    if (!bus.listeners.size) { clearTimeout(bus.timer); bus.socket?.close(1000, 'no subscribers'); bus.socket = null; bus.state.value = 'idle' }
+  }
+}
+
+export const socketSend = (type, data) => {
+  if (bus.socket?.readyState !== WebSocket.OPEN) return false
+  bus.socket.send(JSON.stringify({ type, data }))
+  return true
+}
+
 export const useTaskPulseSocket = ({ onMessage } = {}) => {
-  const state = ref('connecting')
-  const connectionId = ref('')
-  const connections = ref(0)
   const events = ref([])
-  let socket = null
-  let retry = null
-  let closedByUs = false
+  let unsubscribe = null
 
   const push = (e) => {
     events.value.unshift({ at: new Date(), ...e })
     if (events.value.length > 60) events.value.length = 60
   }
 
-  const connect = () => {
-    closedByUs = false
-    state.value = 'connecting'
-    socket = new WebSocket(WS)
-    socket.onopen = () => { state.value = 'open' }
-    socket.onclose = (ev) => {
-      state.value = 'closed'
-      connections.value = 0
-      push({ kind: 'system', text: `Disconnected (${ev.code}${ev.reason ? ' ' + ev.reason : ''})` })
-      if (!closedByUs) retry = setTimeout(connect, 3000)
+  const handle = (msg) => {
+    switch (msg.type) {
+      case 'welcome':
+        push({ kind: 'system', text: `Connected as ${msg.connectionId} · ${msg.connections} online` })
+        break
+      case 'system':
+        push({ kind: 'system', text: `${msg.connectionId} ${msg.event} · ${msg.connections} online` })
+        break
+      case 'broadcast':
+        push({ kind: msg.from === bus.connectionId.value ? 'me' : 'peer', from: msg.from, text: msg.data })
+        break
+      case 'echo':
+        push({ kind: 'me', text: `echo: ${msg.data}` })
+        break
+      case 'pong':
+        push({ kind: 'system', text: 'pong' })
+        break
+      case 'changed':
+        push({ kind: 'peer', text: `${msg.actor || 'someone'} · ${msg.action} ${msg.resource}${msg.kind ? '/' + msg.kind : ''} ${String(msg.id).slice(0, 8)}` })
+        break
+      case 'error':
+        push({ kind: 'error', text: msg.error })
+        break
+      case '_closed':
+        push({ kind: 'system', text: `Disconnected (${msg.code}${msg.reason ? ' ' + msg.reason : ''})` })
+        break
+      case '_retry':
+        push({ kind: 'system', text: `Reconnecting in ${(msg.delayMs / 1000).toFixed(1)} s` })
+        break
+      case '_raw':
+        push({ kind: 'raw', text: msg.data })
+        break
+      default:
+        push({ kind: 'raw', text: JSON.stringify(msg) })
     }
-    socket.onerror = () => { state.value = 'error' }
-    socket.onmessage = (ev) => {
-      let msg
-      try { msg = JSON.parse(ev.data) } catch { return push({ kind: 'raw', text: ev.data }) }
-      if (msg.connections != null) connections.value = msg.connections
-      switch (msg.type) {
-        case 'welcome':
-          connectionId.value = msg.connectionId
-          push({ kind: 'system', text: `Connected as ${msg.connectionId} · ${msg.connections} online` })
-          break
-        case 'system':
-          push({ kind: 'system', text: `${msg.connectionId} ${msg.event} · ${msg.connections} online` })
-          break
-        case 'broadcast':
-          push({ kind: msg.from === connectionId.value ? 'me' : 'peer', from: msg.from, text: msg.data })
-          break
-        case 'echo':
-          push({ kind: 'me', text: `echo: ${msg.data}` })
-          break
-        case 'pong':
-          push({ kind: 'system', text: 'pong' })
-          break
-        case 'error':
-          push({ kind: 'error', text: msg.error })
-          break
-        default:
-          push({ kind: 'raw', text: ev.data })
-      }
-      onMessage?.(msg)
-    }
+    if (!msg.type.startsWith('_')) onMessage?.(msg)
   }
 
-  const send = (type, data) => {
-    if (socket?.readyState !== WebSocket.OPEN) return false
-    socket.send(JSON.stringify({ type, data }))
-    return true
-  }
-
-  const close = () => {
-    closedByUs = true
-    clearTimeout(retry)
-    socket?.close(1000, 'page closed')
-  }
-
-  onMounted(connect)
-  onBeforeUnmount(close)
+  onMounted(() => { unsubscribe = subscribeSocket(handle) })
+  onBeforeUnmount(() => { unsubscribe?.() })
 
   return {
-    state,
-    connectionId,
-    connections,
+    state: bus.state,
+    connectionId: bus.connectionId,
+    connections: bus.connections,
     events,
-    isOpen: computed(() => state.value === 'open'),
-    broadcast: (text) => send('broadcast', text),
-    echo: (text) => send('echo', text),
-    ping: () => send('ping'),
-    reconnect: () => { close(); connect() },
+    isOpen: computed(() => bus.state.value === 'open'),
+    broadcast: (text) => socketSend('broadcast', text),
+    echo: (text) => socketSend('echo', text),
+    ping: () => socketSend('ping'),
+    reconnect: () => { bus.socket?.close(1000, 'reconnect'); bus.attempt = 0; setTimeout(connectBus, 50) },
     url: WS,
   }
+}
+
+// Re-run `handler` (debounced) whenever the API reports that a matching resource changed in any tab or process.
+export const useChangeFeed = (handler, { resources = null, debounceMs = 300 } = {}) => {
+  let timer = null
+  let unsubscribe = null
+  const last = ref(null)
+  const onMsg = (msg) => {
+    if (msg.type !== 'changed') return
+    if (resources && !resources.includes(msg.resource)) return
+    last.value = { ...msg, at: new Date() }
+    clearTimeout(timer)
+    timer = setTimeout(() => handler(msg), debounceMs)
+  }
+  onMounted(() => { unsubscribe = subscribeSocket(onMsg) })
+  onBeforeUnmount(() => { clearTimeout(timer); unsubscribe?.() })
+  return { last, state: bus.state }
 }

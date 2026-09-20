@@ -23,6 +23,24 @@ const write = (value) => {
   } catch { }
 }
 
+let refreshing = null
+
+// One refresh at a time: concurrent 401s share the same in-flight call. Sends the refresh token from memory when
+// we have one; in HttpOnly-cookie mode the browser attaches it by itself.
+export const refreshTokens = () => {
+  if (refreshing) return refreshing
+  const tokens = http.getTokens?.() || {}
+  refreshing = http.post(import.meta.env.VITE_REFRESH_URL || '/api/auth/refresh', { refresh_token: tokens.refresh, access_token: tokens.access })
+    .then(({ data }) => {
+      http.setTokens({ access: data.access_token, refresh: data.refresh_token || tokens.refresh })
+      const s = read()
+      if (s) { s.tokens = { access: data.access_token, refresh: data.refresh_token || tokens.refresh }; s.lastActive = Date.now(); write(s) }
+      return data
+    })
+    .finally(() => { refreshing = null })
+  return refreshing
+}
+
 export const session = {
   save(user) {
     const tokens = http.getTokens?.() || {}

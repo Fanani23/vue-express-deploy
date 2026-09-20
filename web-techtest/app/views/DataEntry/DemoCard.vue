@@ -58,7 +58,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ArrowRightOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined, PlusOutlined, AlignLeftOutlined, InboxOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HistoryOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { Modal, Input } from 'ant-design-vue'
 import { h } from 'vue'
-import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../../taskpulse.js'
+import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS, useChangeFeed } from '../../taskpulse.js'
 
 const api = tasksApi.urls.api
 const tasks = ref([])
@@ -96,12 +96,17 @@ const create = async () => {
   creating.value = true
   try { await tasksApi.create({ title: draft.title, description: draft.description || null }); draft.title = ''; draft.description = ''; await load() } catch (e) { fail(e) } finally { creating.value = false }
 }
+// Optimistic: the card moves (or disappears) immediately; the server response is merged in, a failure rolls back.
 const setStatus = async (t, status) => {
   if (status === t.status) return
-  try { await tasksApi.update(t.id, { title: t.title, description: t.description, status }); await load() } catch (e) { fail(e) }
+  const previous = t.status
+  t.status = status; t.updatedAt = new Date().toISOString()
+  try { Object.assign(t, await tasksApi.update(t.id, { title: t.title, description: t.description, status })) } catch (e) { t.status = previous; fail(e); await load() }
 }
 const remove = async (t) => {
-  try { await tasksApi.remove(t.id); await load() } catch (e) { fail(e) }
+  const snapshot = tasks.value.slice()
+  tasks.value = tasks.value.filter((x) => x.id !== t.id)
+  try { await tasksApi.remove(t.id) } catch (e) { tasks.value = snapshot; fail(e); await load() }
 }
 const rename = (t) => {
   let value = t.title
@@ -117,6 +122,7 @@ const rename = (t) => {
 }
 
 onMounted(load)
+useChangeFeed(() => load(), { resources: ['task'] })
 </script>
 
 <style scoped>

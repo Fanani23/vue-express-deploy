@@ -140,7 +140,7 @@ import { reactive, ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { DatabaseOutlined, ClearOutlined, PlayCircleOutlined, GlobalOutlined, EnvironmentOutlined, FlagOutlined, CompassOutlined, PushpinOutlined, SwapOutlined, PlusCircleOutlined, MinusCircleOutlined, ApartmentOutlined, CheckCircleOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../../store.js'
-import { catalogApi, timeAgo, userKey } from '../../taskpulse.js'
+import { catalogApi, timeAgo, userKey, useChangeFeed } from '../../taskpulse.js'
 
 const store = useMainStore()
 const key = computed(() => userKey(store.user))
@@ -239,6 +239,7 @@ const clear = async () => {
 }
 
 onMounted(() => Promise.all([load(), loadSaved()]))
+useChangeFeed(() => Promise.all([load(), loadSaved()]), { resources: ['catalog'] })
 </script>
 
 <style scoped>

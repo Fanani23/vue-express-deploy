@@ -85,7 +85,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
-import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR } from '../taskpulse.js'
+import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR, useChangeFeed } from '../taskpulse.js'
 import { DatabaseOutlined, ReloadOutlined, PieChartOutlined, BarChartOutlined, HourglassOutlined, HistoryOutlined, ClockCircleOutlined, BorderOutlined, CheckOutlined, CheckCircleOutlined, InboxOutlined } from '@ant-design/icons-vue'
 import { useTheme } from '../theme.js'
 
@@ -186,6 +186,7 @@ const draw = () => {
 watch([stats, isDark], () => nextTick(draw))
 watch(days, load)
 onMounted(load)
+useChangeFeed(() => load(), { resources: ['task'] })
 onBeforeUnmount(() => { statusChart?.destroy(); dailyChart?.destroy() })
 </script>
 

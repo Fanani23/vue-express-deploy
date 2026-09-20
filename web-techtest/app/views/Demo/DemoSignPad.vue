@@ -71,7 +71,7 @@ import '@es-labs/jslib/web/sign-pad'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
 import { EditOutlined, HighlightOutlined, ClearOutlined, FileImageOutlined, DownloadOutlined, CopyOutlined, CloudUploadOutlined, CloudServerOutlined, DeleteOutlined } from '@ant-design/icons-vue'
-import { uploadsApi, dataUrlToFile, formatBytes, timeAgo } from '../../taskpulse.js'
+import { uploadsApi, dataUrlToFile, formatBytes, timeAgo, useChangeFeed } from '../../taskpulse.js'
 
 const imageDataUrl = ref('')
 const saved = ref([])
@@ -83,6 +83,7 @@ const save = async () => {
   try { await uploadsApi.create({ files: [dataUrlToFile(imageDataUrl.value, `signature-${Date.now()}.png`)], source: 'signpad' }); message.success('Signature saved on the server'); await loadSaved() } catch (e) { message.error(e.message) } finally { saving.value = false }
 }
 const removeSaved = async (u) => { try { await uploadsApi.remove(u.id); await loadSaved() } catch (e) { message.error(e.message) } }
+useChangeFeed(() => loadSaved(), { resources: ['upload'] })
 const color = ref('#1a1d21')
 const lineWidth = ref(2)
 const padKey = ref(0)
