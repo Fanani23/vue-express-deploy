@@ -63,24 +63,22 @@ export const catalogApi = {
     return request(`/api/catalog/${kind}${s ? '?' + s : ''}`)
   },
   get: (kind, code) => request(`/api/catalog/${kind}/${code}`),
+  find: async (kind, code) => (await request(`/api/catalog/${kind}?q=${encodeURIComponent(code)}`)).find((item) => item.code === code) || null,
   create: (kind, item) => request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify(item) }),
   update: (kind, code, item) => request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) }),
   remove: (kind, code) => request(`/api/catalog/${kind}/${code}`, { method: 'DELETE' }),
   upsert: async (kind, code, item) => {
-    const res = await fetch(`${API}/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item), headers: { Accept: 'application/json', 'Content-Type': 'application/json' } })
-    if (res.status === 404) return request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify({ code, ...item }) })
-    const body = await res.json().catch(() => null)
-    if (!res.ok) throw new Error(body?.detail || body?.title || `${res.status} ${res.statusText}`)
-    return body
+    const existing = await catalogApi.find(kind, code)
+    return existing
+      ? request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) })
+      : request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify({ code, ...item }) })
   },
 }
 
 export const preferencesApi = {
   get: async (userId) => {
-    const res = await fetch(`${API}/api/preferences/${encodeURIComponent(userId)}`, { headers: { Accept: 'application/json' } })
-    if (res.status === 404) return null
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
-    return res.json()
+    const prefs = await request(`/api/preferences/${encodeURIComponent(userId)}`)
+    return prefs?.saved ? prefs : null
   },
   save: (userId, prefs) => request(`/api/preferences/${encodeURIComponent(userId)}`, { method: 'PUT', body: JSON.stringify(prefs) }),
   remove: (userId) => request(`/api/preferences/${encodeURIComponent(userId)}`, { method: 'DELETE' }),

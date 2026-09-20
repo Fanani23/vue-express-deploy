@@ -3,7 +3,7 @@
     <section class="hero page__card">
       <div class="hero__band" />
       <div class="hero__body">
-        <span class="hero__avatar"><img v-if="gravatar" :src="gravatar" alt="" /><template v-else>{{ initials }}</template></span>
+        <span class="hero__avatar">{{ initials }}</span>
         <div class="hero__who">
           <h1 class="hero__name">{{ identity }}</h1>
           <div class="hero__chips">
@@ -142,7 +142,6 @@ const identity = computed(() => user.value.nickname || user.value.user_meta?.ema
 const initials = computed(() => identity.value.replace(/@.*/, '').slice(0, 2).toUpperCase())
 const isSeeded = computed(() => user.value.otp_fixed === true)
 const providers = ref({})
-const gravatar = ref('')
 const renewing = ref(false)
 const renewedTimes = ref(0)
 const nickname = ref('')
@@ -235,20 +234,11 @@ const renew = async () => {
 const applyNickname = async () => { store.updateUser({ nickname: nickname.value.trim() || undefined }); if (await savePrefs()) message.success(nickname.value.trim() ? 'Display name saved' : 'Display name cleared') }
 const logout = async () => { store.loading = true; await store.doLogin(null); store.loading = false }
 
-const loadGravatar = async () => {
-  const email = user.value.user_meta?.email
-  if (!email || !email.includes('@') || !crypto?.subtle) return
-  const bytes = new TextEncoder().encode(email.trim().toLowerCase())
-  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map((b) => b.toString(16).padStart(2, '0')).join('')
-  const url = `https://www.gravatar.com/avatar/${hash}?s=160&d=404`
-  try { const res = await fetch(url, { method: 'HEAD', mode: 'cors' }); if (res.ok) gravatar.value = url } catch { gravatar.value = '' }
-}
 
 onMounted(async () => {
   tick = setInterval(() => { now.value = Date.now() }, 1000)
   nickname.value = user.value.nickname || ''
   try { prefsSaved.value = await preferencesApi.get(prefKey.value); if (prefsSaved.value) { themeChoice.value = prefsSaved.value.theme; nickname.value = prefsSaved.value.nickname || '' } } catch { prefsSaved.value = null }
-  loadGravatar()
   try { providers.value = (await http.get('/api/auth/providers')).data } catch { providers.value = {} }
 })
 onBeforeUnmount(() => clearInterval(tick))

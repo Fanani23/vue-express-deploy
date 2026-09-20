@@ -181,7 +181,7 @@ const load = async () => {
     form.excludes = form.excludes.filter((x) => f.some((y) => y.code === x))
   } catch (e) { fail(e) } finally { loading.value = false }
 }
-const loadSaved = async () => { try { saved.value = await catalogApi.get('selections-2', key.value) } catch { saved.value = null } }
+const loadSaved = async () => { try { saved.value = await catalogApi.find('selections-2', key.value) } catch { saved.value = null } }
 
 const dedupe = (items) => { const seen = new Set(); return items.filter((c) => !seen.has(c.code) && seen.add(c.code)) }
 const narrow = (listKey, formKey, items) => {

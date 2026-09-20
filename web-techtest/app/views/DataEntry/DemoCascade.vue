@@ -126,7 +126,7 @@ const load = async () => {
   } catch (e) { fail(e) } finally { loading.value = false }
 }
 const loadSaved = async () => {
-  try { saved.value = await catalogApi.get('selections', key.value) } catch { saved.value = null }
+  try { saved.value = await catalogApi.find('selections', key.value) } catch { saved.value = null }
 }
 
 const labelOf = (code) => regions.value.find((r) => r.code === code)?.label || code
