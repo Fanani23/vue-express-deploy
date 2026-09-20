@@ -62,3 +62,73 @@ jobs:
         with:
           name: web-techtest-dist
           path: vue-antd-template/apps/web-techtest/dist
+
+  # The full stack in the browser: TaskPulse (part B) from its compose file, express-template + PGlite with the kit's
+  # patches, the overlay on the Vite dev server, then e2e/run.sh with headless Chrome - the same suite the demo box runs.
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      EXPRESS_TEMPLATE_COMMIT: db883cd
+      VUE_TEMPLATE_COMMIT: 99a34fa
+      JWT: ci-only-jwt-secret-shared-by-express-and-taskpulse-48
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: kit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: TaskPulse (part B) - docker compose, seeded
+        run: |
+          git clone -q --depth 1 https://github.com/Fanani23/taskpulse.git
+          cd taskpulse
+          TASKPULSE_JWT_SECRET="$JWT" TASKPULSE_ALLOWED_ORIGIN=http://127.0.0.1:8080 docker compose up -d --build --quiet-pull
+          for i in $(seq 1 90); do curl -fs http://127.0.0.1:8088/health/ready >/dev/null 2>&1 && break; sleep 2; done
+          curl -fs http://127.0.0.1:8088/health/ready
+          TASKPULSE_JWT_SECRET="$JWT" bash scripts/seed.sh http://127.0.0.1:8088 | tail -3
+
+      - name: express-template (part A) - patches, PGlite, seeds, demo accounts, API on :3000
+        run: |
+          git clone -q https://github.com/es-labs/express-template.git
+          git -C express-template checkout -q "$EXPRESS_TEMPLATE_COMMIT"
+          bash kit/patches/apply.sh "$PWD/express-template" | tail -2
+          cd express-template && npm i --no-audit --no-fund --loglevel=error
+          cd scripts/dbdeploy && npm i --no-audit --no-fund --loglevel=error
+          node --input-type=module -e "import {PGlite} from '@electric-sql/pglite'; const db=new PGlite('./db-sample/dev.db'); await db.exec(\"DO \$\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='api_role') THEN CREATE ROLE api_role; END IF; END \$\$\"); await db.close();"
+          cp "$GITHUB_WORKSPACE"/kit/migrations/*.js db-sample/migrations/
+          npx knex --knexfile db-sample/knexfile.js migrate:latest | tail -1
+          for f in initial_users.js initial_rbac.js initial_testdata.js; do npx knex --knexfile db-sample/knexfile.js seed:run --specific=$f | tail -1; done
+          cp "$GITHUB_WORKSPACE/kit/patches/seed-demo-accounts.mjs" . && node seed-demo-accounts.mjs
+          cd ../../apps/sample-api
+          sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT|; s/^USE_OTP=.*/USE_OTP=EMAIL/" .env
+          grep -q '"COOKIE_HTTPONLY"' .env.json || sed -i 's/^  "JWT": {$/  "JWT": {\n    "COOKIE_HTTPONLY": true,/' .env.json
+          sed -i 's/^    "maxAge": 0, \/\/ no expiry.*/    "maxAge": 86400000,/' .env.json
+          cd ../../scripts/dbdeploy && (nohup node serve-db.js > /tmp/vt-db.log 2>&1 &) && sleep 3
+          cd ../../apps/sample-api && (NODE_ENV=development npm_package_name=@express-template/sample-api npm_package_version=0.0.6 nohup node src/index.js > /tmp/vt-api.log 2>&1 &)
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:3000/api/auth/providers >/dev/null 2>&1 && break; sleep 2; done
+          curl -fs http://127.0.0.1:3000/api/auth/providers
+
+      - name: vue-antd-template + overlay - Vite dev server on :8080
+        run: |
+          git clone -q https://github.com/es-labs/vue-antd-template.git
+          git -C vue-antd-template checkout -q "$VUE_TEMPLATE_COMMIT"
+          cd vue-antd-template && npm i --no-audit --no-fund --loglevel=error && cd apps && npm i --no-audit --no-fund --loglevel=error
+          bash "$GITHUB_WORKSPACE/kit/web-techtest/apply.sh" "$GITHUB_WORKSPACE/vue-antd-template" | tail -1
+          (nohup npx vite --config web-techtest/vite.config.js --mode development > /tmp/vt-fe.log 2>&1 &)
+          for i in $(seq 1 30); do curl -fs http://127.0.0.1:8080/signin >/dev/null 2>&1 && break; sleep 2; done
+          curl -fs -o /dev/null http://127.0.0.1:8080/signin
+
+      - name: Browser e2e (pages, session, dashboard, live, axe)
+        run: |
+          cd kit/e2e && npm i --no-audit --no-fund --loglevel=error
+          E2E_CHROME="$(command -v google-chrome || command -v chromium-browser)" bash run.sh
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          echo "== vt-api"; tail -60 /tmp/vt-api.log || true
+          echo "== vt-fe"; tail -30 /tmp/vt-fe.log || true
+          echo "== vt-db"; tail -20 /tmp/vt-db.log || true
+          echo "== taskpulse"; (cd taskpulse && docker compose logs --tail 60) || true
