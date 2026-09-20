@@ -117,6 +117,7 @@ jobs:
           cp "$GITHUB_WORKSPACE/kit/patches/seed-demo-accounts.mjs" . && node seed-demo-accounts.mjs
           cd ../../apps/sample-api
           sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT|; s/^USE_OTP=.*/USE_OTP=EMAIL/" .env
+          printf 'TASKPULSE_AUDIT_URL=http://127.0.0.1:8088/api/audit\nTASKPULSE_AUDIT_TOKEN=compose-audit-token\n' >> .env
           grep -q '"COOKIE_HTTPONLY"' .env.json || sed -i 's/^  "JWT": {$/  "JWT": {\n    "COOKIE_HTTPONLY": true,/' .env.json
           sed -i 's/^    "maxAge": 0, \/\/ no expiry.*/    "maxAge": 86400000,/' .env.json
           cd ../../scripts/dbdeploy && (nohup node serve-db.js > /tmp/vt-db.log 2>&1 &) && sleep 3
@@ -137,7 +138,8 @@ jobs:
       - name: Browser e2e (pages, session, dashboard, live, axe)
         run: |
           cd kit/e2e && npm i --no-audit --no-fund --loglevel=error
-          E2E_CHROME="$(command -v google-chrome || command -v chromium-browser)" bash run.sh
+          # the webhook e2e's sink is the API's own loopback address as seen from inside its container (:8080 in compose)
+          E2E_WEBHOOK_SINK=http://127.0.0.1:8080/api/audit E2E_CHROME="$(command -v google-chrome || command -v chromium-browser)" bash run.sh
 
       - name: Logs on failure
         if: failure()

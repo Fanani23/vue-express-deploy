@@ -12,7 +12,9 @@ bash run.sh tests/live.mjs                                                      
 ```
 
 Chrome: set `E2E_CHROME=/path/to/chrome` to launch one, or `E2E_BROWSER_URL=http://127.0.0.1:9333` to attach to a
-Chrome started with `--remote-debugging-port=9333`. A `[FAIL]` line makes the script exit 1.
+Chrome started with `--remote-debugging-port=9333`. A `[FAIL]` line makes the script exit 1. `webhooks.mjs` points
+its hook at the API's own loopback address (`E2E_WEBHOOK_SINK`, default `http://127.0.0.1:5080/api/audit`; in
+compose the API listens on `:8080` inside its container).
 
 | Script | Checks |
 |---|---|

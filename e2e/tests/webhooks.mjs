@@ -5,12 +5,13 @@ import { start, sleep, TASKPULSE } from '../lib.mjs'
 // time, which is exactly what the delivery log should show: three attempts, the sink's status, not delivered.
 const t = await start()
 await t.login()
-const url = TASKPULSE.replace(/^https?:\/\/[^/]+/, 'http://127.0.0.1:5080') + '/api/audit'
+// the sink is the API's own loopback address (E2E_WEBHOOK_SINK when the API listens elsewhere, e.g. in a container)
+const url = process.env.E2E_WEBHOOK_SINK || 'http://127.0.0.1:5080/api/audit'
 await t.page.type('[data-cy=hook-url]', url)
 await t.page.type('[data-cy=hook-secret]', 'e2e-webhook-secret-0123456789')
 await t.page.click('[data-cy=hook-add]'); await sleep(1500)
 const listed = await t.page.$$eval('[data-cy=webhooks] .hook', (els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim()))
-t.check('the webhook is listed', listed.some((x) => x.includes('127.0.0.1:5080/api/audit')), listed.join(' | '))
+t.check('the webhook is listed', listed.some((x) => x.includes(url.replace(/^https?:\/\//, ''))), listed.join(' | '))
 
 const tok = await t.page.evaluate(() => JSON.parse(localStorage.getItem('vt.session')).tokens.access)
 const created = await t.page.evaluate(async (u, tok) => (await fetch(u + '/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ title: 'webhook e2e' }) })).json(), TASKPULSE, tok)
