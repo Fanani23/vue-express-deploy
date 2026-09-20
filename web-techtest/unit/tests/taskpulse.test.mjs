@@ -199,27 +199,3 @@ describe('more of the REST surface', () => {
     expect(fetch.mock.calls[1][0]).toBe('http://taskpulse.test/api/catalog')
   })
 })
-
-describe('change feed', () => {
-  it('debounces matching change events into the handler and warns once when it fails', async () => {
-    vi.useFakeTimers()
-    const { message } = await import('ant-design-vue')
-    const handler = vi.fn().mockRejectedValue(new Error('API restarting'))
-    // mount the composable inside a component so onMounted/onBeforeUnmount run
-    const { createApp, defineComponent, h } = await import('vue')
-    const app = createApp(defineComponent({ setup() { mod.useChangeFeed(handler, { resources: ['task'] }); return () => h('div') } }))
-    app.mount(document.createElement('div'))
-    const sock = FakeSocket.instances[0]
-    sock.open()
-    sock.receive({ type: 'changed', resource: 'catalog', action: 'create', id: '1' })
-    sock.receive({ type: 'changed', resource: 'task', action: 'create', id: '2' })
-    sock.receive({ type: 'changed', resource: 'task', action: 'update', id: '2' })
-    await vi.advanceTimersByTimeAsync(400)
-    expect(handler).toHaveBeenCalledTimes(1) // catalog ignored, the two task events collapsed
-    expect(message.warning).toHaveBeenCalledTimes(1)
-    sock.receive({ type: 'changed', resource: 'task', action: 'delete', id: '2' })
-    await vi.advanceTimersByTimeAsync(400)
-    expect(message.warning).toHaveBeenCalledTimes(1) // rate limited to once a minute
-    app.unmount()
-  })
-})

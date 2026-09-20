@@ -1,0 +1,45 @@
+name: uptime
+
+# Every 15 minutes: the public portal, the express API, TaskPulse REST readiness (PostgreSQL) and the WebSocket
+# handshake. A failed run is a GitHub notification to the repository
+# owner - alerting without extra infrastructure. Run it by hand from the Actions tab to check the box any time.
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      PORTAL: https://202-155-132-250.sslip.io
+      TASKPULSE: https://taskpulse.202-155-132-250.sslip.io
+    steps:
+      - name: Portal serves the app
+        run: |
+          code=$(curl -s -o /tmp/index.html -w '%{http_code}' --max-time 20 "$PORTAL/signin")
+          test "$code" = 200 && grep -q '<div id="app">' /tmp/index.html
+      - name: express API answers (sign-in providers)
+        run: |
+          curl -sf --max-time 20 "$PORTAL/api/auth/providers" | tee /tmp/express.json
+          grep -q '"otp"' /tmp/express.json
+      - name: TaskPulse readiness (PostgreSQL)
+        run: |
+          curl -sf --max-time 20 "$TASKPULSE/health/ready" | tee /tmp/api.json
+          grep -q 'Healthy' /tmp/api.json
+      - name: TaskPulse WebSocket handshake
+        run: |
+          node -e '
+            const ws = new WebSocket(process.env.TASKPULSE.replace(/^http/, "ws") + "/ws");
+            const timer = setTimeout(() => { console.error("no welcome within 10 s"); process.exit(1); }, 10000);
+            ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.type === "welcome") { console.log("welcome", m.connectionId); clearTimeout(timer); ws.close(); } };
+            ws.onerror = (e) => { console.error("socket error", e.message); process.exit(1); };'
+      - name: TLS certificate has more than 14 days left
+        run: |
+          for host in 202-155-132-250.sslip.io taskpulse.202-155-132-250.sslip.io; do
+            end=$(echo | openssl s_client -servername "$host" -connect "$host:443" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+            left=$(( ( $(date -d "$end" +%s) - $(date +%s) ) / 86400 ))
+            echo "$host: $left day(s) left"
+            test "$left" -gt 14
+          done

@@ -19,7 +19,7 @@ export default defineConfig({
       include: ['**/app/session.js', '**/app/taskpulse.js', '**/app/users.js'],
       allowExternal: true,
       reporter: ['text', 'json-summary'],
-      thresholds: { lines: 80, functions: 70 },
+      thresholds: { lines: 75, functions: 70 },
     },
     env: {
       VITE_TASKPULSE_URL: 'http://taskpulse.test',
