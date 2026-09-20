@@ -55,6 +55,8 @@ import BrandMark from '../components/BrandMark.vue'
 import { useMainStore } from '../store.js'
 import { SECURE_ROUTES } from '../setups/routes.js'
 import { onLogin, onLogout } from '../setups/events.js'
+import { useTheme } from '../theme.js'
+import { preferencesApi, userKey } from '../taskpulse.js'
 
 import idleTimer from '@es-labs/jslib/web/idle'
 
@@ -89,7 +91,22 @@ const toPascalCase = (str) => {
   return str[0].toUpperCase() + str.substring(1, str.length)
 }
 
+const theme = useTheme()
+const applyServerPreferences = async () => {
+  if (!store.user || store.user.prefs_loaded) return
+  try {
+    const prefs = await preferencesApi.get(userKey(store.user))
+    if (prefs) {
+      theme.set(prefs.theme === 'system' ? null : prefs.theme)
+      store.updateUser({ nickname: prefs.nickname || undefined, prefs_loaded: true })
+    } else {
+      store.updateUser({ prefs_loaded: true })
+    }
+  } catch { }
+}
+
 onMounted(async () => {
+  applyServerPreferences()
   idleTimer.timeouts.push({ time: 300, fn: () => alert('Idle Timeout Test'), stop: true })
   idleTimer.start()
 

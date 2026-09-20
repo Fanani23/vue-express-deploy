@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 })
 
 const _setUser = async (data, decoded) => {
-  await store.doLogin({ ...decoded, user_meta: data?.user_meta })
+  await store.doLogin({ ...decoded, user_meta: data?.user_meta, signin_provider: 'password', otp_fixed: mode.value === 'otp' ? otpFixed.value === true : false })
 }
 
 const login = async () => {

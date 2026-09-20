@@ -45,7 +45,7 @@ onMounted(async () => {
     http.setTokens({ access, refresh })
     http.setOptions({ refreshUrl: VITE_REFRESH_URL })
     history.replaceState(null, '', route.path)
-    await store.doLogin({ ...decoded, user_meta: meta })
+    await store.doLogin({ ...decoded, user_meta: meta, signin_provider: 'google', otp_fixed: false })
   } catch (e) {
     failed.value = e?.message || String(e)
   }

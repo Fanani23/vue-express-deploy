@@ -42,22 +42,12 @@
 
       <a-col :xs="24" :lg="8">
         <div class="page__card">
-          <div class="sec"><span class="sec__icon"><SafetyCertificateOutlined /></span><h3 class="sec__title">Security</h3><span class="sec__count">{{ providers.google ? '3 methods' : '2 methods' }}</span></div>
+          <div class="sec"><span class="sec__icon"><SafetyCertificateOutlined /></span><h3 class="sec__title">Security</h3><span class="sec__count">{{ methods.filter((m) => m.on).length }} of {{ methods.length }} active</span></div>
           <ul class="methods">
-            <li class="method">
-              <span class="method__icon"><LockOutlined /></span>
-              <span class="method__text"><strong>Password + one-time code</strong><span class="page__muted">scrypt-hashed password, then a 6-digit code</span></span>
-              <a-tag color="success">on</a-tag>
-            </li>
-            <li class="method">
-              <span class="method__icon"><MailOutlined /></span>
-              <span class="method__text"><strong>Second factor</strong><span class="page__muted">{{ secondFactor }}</span></span>
-              <a-tag :color="isSeeded ? 'gold' : 'success'">{{ isSeeded ? 'default code' : providers.otp || '—' }}</a-tag>
-            </li>
-            <li class="method">
-              <span class="method__icon"><GoogleOutlined /></span>
-              <span class="method__text"><strong>Google</strong><span class="page__muted">{{ providers.google ? 'account chooser; same account when the verified email matches' : 'not configured on this server' }}</span></span>
-              <a-tag :color="providers.google ? 'success' : 'default'">{{ providers.google ? 'available' : 'off' }}</a-tag>
+            <li v-for="m in methods" :key="m.key" class="method" :data-cy="'method-' + m.key">
+              <span class="method__icon" :class="{ 'method__icon--off': !m.on }"><component :is="m.icon" /></span>
+              <span class="method__text"><strong>{{ m.title }}</strong><span class="page__muted">{{ m.text }}</span></span>
+              <a-tag :color="m.on ? (m.tone || 'success') : 'default'">{{ m.tag }}</a-tag>
             </li>
             <li class="method">
               <span class="method__icon"><SafetyCertificateOutlined /></span>
@@ -70,16 +60,19 @@
 
       <a-col :xs="24" :lg="8">
         <div class="page__card">
-          <div class="sec"><span class="sec__icon"><SettingOutlined /></span><h3 class="sec__title">Preferences</h3></div>
+          <div class="sec"><span class="sec__icon"><SettingOutlined /></span><h3 class="sec__title">Preferences</h3><span class="sec__count" data-cy="prefs-state">{{ prefsState }}</span></div>
           <div class="pref">
             <div class="pref__label"><BgColorsOutlined /> Appearance</div>
-            <a-segmented v-model:value="themeChoice" :options="themeOptions" block @change="(v) => theme.set(v === 'system' ? null : v)" />
-            <div class="page__muted" style="margin-top: 0.4rem">This browser only · System follows the OS.</div>
+            <a-segmented v-model:value="themeChoice" :options="themeOptions" block @change="applyTheme" />
+            <div class="page__muted" style="margin-top: 0.4rem">System follows the OS · saved on the server for this account.</div>
           </div>
           <div class="pref">
-            <div class="pref__label"><IdcardOutlined /> Display name <span class="page__muted">(this session)</span></div>
-            <a-input-search v-model:value="nickname" placeholder="How the header should call you" enter-button="Apply" :maxlength="40" @search="applyNickname" />
-            <div class="page__muted" style="margin-top: 0.4rem">Updates the header instantly · not saved on the server (the template has no profile API).</div>
+            <div class="pref__label"><IdcardOutlined /> Display name</div>
+            <a-input-search v-model:value="nickname" placeholder="How the header should call you" enter-button="Save" :maxlength="40" @search="applyNickname" data-cy="nickname" />
+            <div class="page__muted" style="margin-top: 0.4rem">Updates the header instantly and is stored with <code>PUT /api/preferences/{{ prefKey }}</code>, so it follows you to another browser.</div>
+          </div>
+          <div class="pref" v-if="prefsSaved">
+            <a-button size="small" type="text" danger @click="forgetPrefs"><template #icon><DeleteOutlined /></template>forget my preferences on the server</a-button>
           </div>
         </div>
       </a-col>
@@ -130,11 +123,12 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
-import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined, BankOutlined, UserOutlined, TeamOutlined, SafetyOutlined, CrownOutlined, TagOutlined, FileTextOutlined, MinusOutlined } from '@ant-design/icons-vue'
+import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined, BankOutlined, UserOutlined, TeamOutlined, SafetyOutlined, CrownOutlined, TagOutlined, FileTextOutlined, MinusOutlined, DeleteOutlined, NumberOutlined } from '@ant-design/icons-vue'
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
 import { useMainStore } from '../store.js'
 import { http } from '../../common/plugins/fetch.js'
 import { useTheme } from '../theme.js'
+import { preferencesApi, userKey, timeAgo } from '../taskpulse.js'
 
 const store = useMainStore()
 const theme = useTheme()
@@ -142,7 +136,7 @@ const user = computed(() => store.user || {})
 const roles = computed(() => (Array.isArray(user.value.roles) ? user.value.roles : []))
 const identity = computed(() => user.value.nickname || user.value.user_meta?.email || user.value.email || user.value.username || `user #${user.value.sub ?? ''}`)
 const initials = computed(() => identity.value.replace(/@.*/, '').slice(0, 2).toUpperCase())
-const isSeeded = computed(() => /^(test|ais-one|aaronjxz|admin@techtest\.dev|demo@techtest\.dev|viewer@techtest\.dev)$/.test(user.value.user_meta?.email || ''))
+const isSeeded = computed(() => user.value.otp_fixed === true)
 const providers = ref({})
 const gravatar = ref('')
 const renewing = ref(false)
@@ -163,10 +157,26 @@ const remainingLong = computed(() => (secondsLeft.value <= 0 ? 'access token exp
 const ringColor = computed(() => (percentLeft.value > 50 ? '#16a34a' : percentLeft.value > 20 ? '#f59e0b' : '#ef4444'))
 const tokenState = computed(() => (secondsLeft.value <= 0 ? 'token expired' : secondsLeft.value < 300 ? 'token expiring' : 'token valid'))
 const tokenColor = computed(() => (secondsLeft.value <= 0 ? 'error' : secondsLeft.value < 300 ? 'warning' : 'success'))
-const secondFactor = computed(() => (isSeeded.value ? 'this account uses its default code 111111' : providers.value.otp === 'EMAIL' ? 'a 6-digit code is emailed at every sign-in' : providers.value.otp === 'TEST' ? 'test mode, fixed code' : providers.value.otp === 'GA' ? 'authenticator app (TOTP)' : '—'))
+const viaGoogle = computed(() => user.value.signin_provider === 'google')
+const methods = computed(() => [
+  { key: 'password', icon: LockOutlined, title: 'Password', on: !viaGoogle.value, tag: viaGoogle.value ? 'not used' : 'used this session', text: viaGoogle.value ? 'you signed in with Google, so no password was checked' : 'scrypt-hashed and checked server-side at this sign-in' },
+  { key: 'code', icon: isSeeded.value ? NumberOutlined : MailOutlined, title: 'One-time code', on: !viaGoogle.value, tone: isSeeded.value ? 'gold' : 'success', tag: viaGoogle.value ? 'skipped' : isSeeded.value ? 'default code' : providers.value.otp || '—', text: viaGoogle.value ? 'Google verified the identity; the server issued tokens without a code' : isSeeded.value ? 'this account carries a fixed code (users.otp_pin) — the server said so at sign-in' : providers.value.otp === 'EMAIL' ? 'a 6-digit code was emailed to you at this sign-in' : providers.value.otp === 'GA' ? 'authenticator app (TOTP)' : providers.value.otp === 'TEST' ? 'test mode, fixed code for everyone' : '—' },
+  { key: 'google', icon: GoogleOutlined, title: 'Google', on: viaGoogle.value, tag: viaGoogle.value ? 'used this session' : providers.value.google ? 'available' : 'off', text: viaGoogle.value ? 'signed in through Google\x27s account chooser; matched by verified email' : providers.value.google ? 'offered on the sign-in page (/api/auth/providers); matches an account by verified email' : 'not configured on this server' },
+])
 
 const themeOptions = [{ label: 'System', value: 'system' }, { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }]
 const themeChoice = ref(theme.preference.value || 'system')
+const prefKey = computed(() => userKey(user.value))
+const prefsSaved = ref(null)
+const prefsState = computed(() => (prefsSaved.value ? 'saved ' + timeAgo(prefsSaved.value.updatedAt) : 'not saved yet'))
+const savePrefs = async () => {
+  try {
+    prefsSaved.value = await preferencesApi.save(prefKey.value, { theme: themeChoice.value, nickname: nickname.value.trim() || null })
+    return true
+  } catch (e) { message.error('Could not save on TaskPulse: ' + e.message); return false }
+}
+const applyTheme = async (v) => { theme.set(v === 'system' ? null : v); await savePrefs() }
+const forgetPrefs = async () => { try { await preferencesApi.remove(prefKey.value); prefsSaved.value = null; message.success('Preferences removed from the server') } catch (e) { message.error(e.message) } }
 
 const claims = computed(() => JSON.stringify(user.value, null, 2))
 const meaning = {
@@ -178,10 +188,11 @@ const meaning = {
   iat: 'issued at (unix seconds)',
   exp: 'expires at (unix seconds) — the API rejects the token after this',
   user_meta: 'selected user fields copied into the token (AUTH_USER_FIELDS_JWT_PAYLOAD)',
-  nickname: 'set on this page; lives in the store only',
+  nickname: 'display name from your saved preferences (/api/preferences) — not part of the JWT',
 }
 const CLAIM_ICON = { iss: BankOutlined, sub: UserOutlined, aud: TeamOutlined, scope: SafetyOutlined, roles: CrownOutlined, iat: LoginOutlined, exp: FieldTimeOutlined, user_meta: IdcardOutlined, nickname: TagOutlined }
-const explained = computed(() => Object.entries(user.value).map(([claim, value]) => {
+const APP_STATE = new Set(['signin_provider', 'otp_fixed', 'prefs_loaded'])
+const explained = computed(() => Object.entries(user.value).filter(([claim]) => !APP_STATE.has(claim)).map(([claim, value]) => {
   const c = { claim, meaning: meaning[claim] || '', icon: CLAIM_ICON[claim] || FileTextOutlined, empty: value === '' || value == null || (Array.isArray(value) && !value.length) }
   if (Array.isArray(value)) c.tags = value.map(String)
   else if (value && typeof value === 'object') c.pairs = Object.entries(value).map(([k, v]) => ({ k, v: String(v) }))
@@ -215,7 +226,7 @@ const renew = async () => {
     renewing.value = false
   }
 }
-const applyNickname = () => { store.updateUser({ nickname: nickname.value.trim() || undefined }); message.success(nickname.value.trim() ? 'Display name applied' : 'Display name cleared') }
+const applyNickname = async () => { store.updateUser({ nickname: nickname.value.trim() || undefined }); if (await savePrefs()) message.success(nickname.value.trim() ? 'Display name saved' : 'Display name cleared') }
 const logout = async () => { store.loading = true; await store.doLogin(null); store.loading = false }
 
 const loadGravatar = async () => {
@@ -230,6 +241,7 @@ const loadGravatar = async () => {
 onMounted(async () => {
   tick = setInterval(() => { now.value = Date.now() }, 1000)
   nickname.value = user.value.nickname || ''
+  try { prefsSaved.value = await preferencesApi.get(prefKey.value); if (prefsSaved.value) { themeChoice.value = prefsSaved.value.theme; nickname.value = prefsSaved.value.nickname || '' } } catch { prefsSaved.value = null }
   loadGravatar()
   try { providers.value = (await http.get('/api/auth/providers')).data } catch { providers.value = {} }
 })
@@ -260,6 +272,7 @@ onBeforeUnmount(() => clearInterval(tick))
 .methods { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
 .method { display: grid; grid-template-columns: auto 1fr auto; gap: 0.75rem; align-items: center; padding: 0.6rem 0.75rem; border: 1px solid var(--p-border); border-radius: 10px; background: var(--p-bg); }
 .method__icon { width: 2rem; height: 2rem; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--p-accent) 12%, transparent); color: var(--p-accent); }
+.method__icon--off { background: var(--p-bg); color: var(--p-muted); }
 .method__text { display: grid; line-height: 1.3; }
 .method__text .page__muted { font-size: 0.78rem; }
 .pref + .pref { margin-top: 1rem; }
