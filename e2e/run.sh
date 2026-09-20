@@ -14,7 +14,7 @@ failed=0
 # The first script signs in through the UI and caches the session for the others (lib.mjs); session.mjs goes last
 # because it revokes the session on purpose. A run starts from a clean cache.
 rm -rf "${TMPDIR:-/tmp}/vt-e2e"
-for t in "${@:-tests/pages.mjs tests/dashboard.mjs tests/live.mjs tests/a11y.mjs tests/session.mjs}"; do
+for t in "${@:-tests/pages.mjs tests/dashboard.mjs tests/taskfields.mjs tests/live.mjs tests/a11y.mjs tests/session.mjs}"; do
   for f in $t; do
     printf '\n\033[1;34m==> %s\033[0m\n' "$f"
     node "$f" || failed=1

@@ -101,7 +101,7 @@ const setStatus = async (t, status) => {
   if (status === t.status) return
   const previous = t.status
   t.status = status; t.updatedAt = new Date().toISOString()
-  try { Object.assign(t, await tasksApi.update(t.id, { title: t.title, description: t.description, status })) } catch (e) { t.status = previous; fail(e); await load() }
+  try { Object.assign(t, await tasksApi.patch({ ...t, status: previous }, { status })) } catch (e) { t.status = previous; fail(e); await load() }
 }
 const remove = async (t) => {
   const snapshot = tasks.value.slice()
@@ -116,7 +116,7 @@ const rename = (t) => {
     okText: 'Save',
     onOk: async () => {
       if (!value.trim() || value === t.title) return
-      try { await tasksApi.update(t.id, { title: value.trim(), description: t.description, status: t.status }); await load() } catch (e) { fail(e) }
+      try { await tasksApi.patch(t, { title: value.trim() }); await load() } catch (e) { fail(e) }
     },
   })
 }

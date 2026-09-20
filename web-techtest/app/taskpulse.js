@@ -6,6 +6,27 @@ const API = (import.meta.env.VITE_TASKPULSE_URL || 'http://127.0.0.1:8088').repl
 const WS = import.meta.env.VITE_TASKPULSE_WS_URL || API.replace(/^http/, 'ws') + '/ws'
 
 export const STATUSES = ['Todo', 'InProgress', 'Done']
+export const PRIORITIES = ['Low', 'Normal', 'High']
+export const PRIORITY_COLOR = { Low: 'default', Normal: 'blue', High: 'volcano' }
+export const isOverdue = (t) => t && t.status !== 'Done' && t.dueAt && new Date(t.dueAt) < new Date()
+export const dueLabel = (iso) => {
+  if (!iso) return ''
+  const d = new Date(iso); const today = new Date(); today.setHours(0, 0, 0, 0)
+  const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'tomorrow'
+  if (days === -1) return 'yesterday'
+  if (days < 0) return `${-days} d overdue`
+  if (days < 7) return `in ${days} d`
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+// The body PUT /api/tasks/{id} expects: the whole task (the server replaces, it does not merge) with the change on top.
+export const taskBody = (task, changes = {}) => ({
+  title: task.title, description: task.description ?? null, status: task.status,
+  priority: task.priority ?? 'Normal', dueAt: task.dueAt ?? null, assigneeId: task.assigneeId ?? null, assigneeName: task.assigneeName ?? null,
+  labels: task.labels ?? [],
+  ...changes,
+})
 export const STATUS_LABEL = { Todo: 'To do', InProgress: 'In progress', Done: 'Done' }
 export const STATUS_COLOR = { Todo: 'default', InProgress: 'processing', Done: 'success' }
 export const NEXT_STATUS = { Todo: 'InProgress', InProgress: 'Done', Done: 'Todo' }
@@ -32,10 +53,14 @@ const request = async (path, options = {}) => {
 }
 
 export const tasksApi = {
-  list: ({ status, q: search, page = 1, pageSize = 10 } = {}) => {
+  list: ({ status, q: search, page = 1, pageSize = 10, priority, assignee, label, due } = {}) => {
     const q = new URLSearchParams({ page, pageSize })
     if (status) q.set('status', status)
     if (search && search.trim()) q.set('q', search.trim())
+    if (priority) q.set('priority', priority)
+    if (assignee) q.set('assignee', assignee)
+    if (label) q.set('label', label)
+    if (due) q.set('due', due)
     return request(`/api/tasks?${q}`)
   },
   get: (id) => request(`/api/tasks/${id}`),
@@ -50,6 +75,8 @@ export const tasksApi = {
   stats: (days = 14) => request(`/api/tasks/stats?days=${days}`),
   create: (task) => request('/api/tasks', { method: 'POST', body: JSON.stringify(task) }),
   update: (id, task) => request(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(task) }),
+  // change one or more fields of a task the caller already holds
+  patch: (task, changes) => request(`/api/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify(taskBody(task, changes)) }),
   remove: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
   ready: async () => {
     try {

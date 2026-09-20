@@ -276,7 +276,7 @@ const advanceOldest = async (status) => {
   if (!t) return
   try {
     const full = await tasksApi.get(t.id)
-    await tasksApi.update(t.id, { title: full.title, description: full.description, status })
+    await tasksApi.patch(full, { status })
     message.success(`"${full.title}" → ${STATUS_LABEL[status]}`)
     await loadStats()
   } catch (e) { fail(e) }

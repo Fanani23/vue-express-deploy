@@ -55,7 +55,21 @@
               <template #icon><PlusOutlined /></template>
               Add
             </a-button>
+            <div class="new-task__extra">
+              <a-select v-model:value="draft.priority" size="small" class="new-task__priority" :options="PRIORITIES.map((p) => ({ value: p, label: p }))" data-a11y-label="Priority" data-cy="new-priority" />
+              <a-date-picker v-model:value="draft.due" size="small" class="new-task__due" placeholder="Due date" :show-time="false" value-format="YYYY-MM-DD" />
+              <a-select v-model:value="draft.assigneeId" size="small" class="new-task__assignee" placeholder="Assign to…" allow-clear show-search option-filter-prop="label" :options="assigneeOptions" data-a11y-label="Assignee" data-cy="new-assignee" />
+              <a-select v-model:value="draft.labels" mode="tags" size="small" class="new-task__labels" placeholder="Labels" :options="labelOptions" :max-tag-count="3" data-a11y-label="Labels" data-cy="new-labels" />
+            </div>
           </form>
+
+          <div class="task-filters" data-cy="task-filters">
+            <a-select v-model:value="extra.priority" size="small" placeholder="Any priority" allow-clear :options="PRIORITIES.map((p) => ({ value: p, label: p }))" data-a11y-label="Filter by priority" class="task-filters__select" />
+            <a-select v-model:value="extra.assignee" size="small" placeholder="Anyone" allow-clear show-search option-filter-prop="label" :options="[{ value: 'me', label: 'Assigned to me' }, ...assigneeOptions]" data-a11y-label="Filter by assignee" class="task-filters__select" />
+            <a-select v-model:value="extra.due" size="small" placeholder="Any due date" allow-clear :options="[{ value: 'overdue', label: 'Overdue' }, { value: 'today', label: 'Due today' }, { value: 'week', label: 'Due this week' }, { value: 'none', label: 'No due date' }]" data-a11y-label="Filter by due date" class="task-filters__select" />
+            <a-select v-model:value="extra.label" size="small" placeholder="Any label" allow-clear show-search :options="labelOptions" data-a11y-label="Filter by label" class="task-filters__select" />
+            <span v-if="overdueCount" class="task-filters__overdue" data-cy="overdue-count"><ClockCircleOutlined /> {{ overdueCount }} overdue</span>
+          </div>
 
           <a-table
             :data-source="tasks"
@@ -73,6 +87,12 @@
                   <div class="task__text">
                     <div class="task__title" :class="{ 'task__title--done': record.status === 'Done' }">{{ record.title }}</div>
                     <div v-if="record.description" class="task__desc">{{ record.description }}</div>
+                    <div v-if="record.priority !== 'Normal' || record.dueAt || record.assigneeName || record.labels?.length" class="task__meta">
+                      <a-tag v-if="record.priority !== 'Normal'" :color="PRIORITY_COLOR[record.priority]" class="task__chip"><FlagOutlined /> {{ record.priority }}</a-tag>
+                      <a-tag v-if="record.dueAt" :color="isOverdue(record) ? 'error' : 'default'" class="task__chip" :title="new Date(record.dueAt).toLocaleDateString()"><CalendarOutlined /> {{ dueLabel(record.dueAt) }}</a-tag>
+                      <a-tag v-if="record.assigneeName" class="task__chip task__chip--who"><UserOutlined /> {{ record.assigneeName.replace(/@.*/, '') }}</a-tag>
+                      <a-tag v-for="l in record.labels || []" :key="l" class="task__chip task__chip--label"><TagsOutlined /> {{ l }}</a-tag>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -152,7 +172,10 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined, SearchOutlined } from '@ant-design/icons-vue'
-import { tasksApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
+import { tasksApi, catalogApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS, PRIORITIES, PRIORITY_COLOR, isOverdue, dueLabel } from '../taskpulse.js'
+import { usersApi } from '../users.js'
+import { useMainStore } from '../store.js'
+import { UserOutlined, CalendarOutlined, FlagOutlined, TagsOutlined } from '@ant-design/icons-vue'
 
 const api = tasksApi.urls.api
 const apiReady = ref(null)
@@ -172,7 +195,21 @@ watch(appliedSearch, () => { page.value = 1; refresh() })
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
-const draft = reactive({ title: '', description: '' })
+const draft = reactive({ title: '', description: '', priority: 'Normal', due: null, assigneeId: null, labels: [] })
+const extra = reactive({ priority: null, assignee: null, due: null, label: null })
+const store = useMainStore()
+const users = ref([])
+const tags = ref([])
+const overdueCount = ref(0)
+const assigneeOptions = computed(() => users.value.map((u) => ({ value: String(u.id), label: u.username + (u.email ? ` · ${u.email}` : '') })))
+const labelOptions = computed(() => tags.value.map((t) => ({ value: t.code, label: t.label })))
+const assigneeName = (id) => { const u = users.value.find((x) => String(x.id) === String(id)); return u ? u.email || u.username : null }
+const loadOptions = async () => {
+  try { users.value = await usersApi.list() } catch { users.value = [] }
+  try { tags.value = await catalogApi.list('tags') } catch { tags.value = [] }
+}
+const loadOverdue = async () => { try { overdueCount.value = (await tasksApi.list({ due: 'overdue', pageSize: 1 })).total } catch { } }
+watch(extra, () => { page.value = 1; refresh() })
 const shout = ref('')
 
 const statCards = [
@@ -205,14 +242,14 @@ const loadCounts = async () => {
 const loadTasks = async () => {
   loading.value = true
   try {
-    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value })
+    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value, ...extra })
     tasks.value = res.items
     total.value = res.total
     if (res.items.length === 0 && page.value > 1) { page.value = 1; await loadTasks() }
   } catch (e) { fail(e) } finally { loading.value = false }
 }
 
-const refresh = () => Promise.all([loadCounts(), loadTasks()])
+const refresh = () => Promise.all([loadCounts(), loadTasks(), loadOverdue()])
 
 const setFilter = (key) => { filter.value = key }
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
@@ -232,8 +269,13 @@ const createTask = async () => {
   if (!draft.title.trim() || creating.value) return
   creating.value = true
   try {
-    const task = await tasksApi.create({ title: draft.title, description: draft.description || null })
-    draft.title = ''; draft.description = ''
+    const task = await tasksApi.create({
+      title: draft.title, description: draft.description || null, priority: draft.priority,
+      dueAt: draft.due ? new Date(draft.due + 'T17:00:00').toISOString() : null,
+      assigneeId: draft.assigneeId || null, assigneeName: draft.assigneeId ? assigneeName(draft.assigneeId) : null,
+      labels: draft.labels,
+    })
+    draft.title = ''; draft.description = ''; draft.priority = 'Normal'; draft.due = null; draft.assigneeId = null; draft.labels = []
     filter.value = 'all'; page.value = 1
     await refresh()
     announce('created', task)
@@ -251,7 +293,7 @@ const setStatus = async (record, status) => {
   bump(previous, status)
   if (filter.value !== 'all' && filter.value !== status) tasks.value = tasks.value.filter((t) => t.id !== record.id)
   try {
-    const task = await tasksApi.update(record.id, { title: record.title, description: record.description, status })
+    const task = await tasksApi.patch({ ...record, status: previous }, { status })
     if (row) Object.assign(row, task)
     announce(status === 'Done' ? 'done' : 'moved', task)
     loadCounts()
@@ -285,13 +327,24 @@ const sendBroadcast = () => {
 watch(filter, () => { page.value = 1; loadTasks() })
 
 onMounted(async () => {
+  loadOptions()
   apiReady.value = await tasksApi.ready()
   await refresh()
 })
 useChangeFeed(() => refresh(), { resources: ['task'] })
 </script>
 
-<style src="../style/dashboard.css"></style>
+<style src="../style/dashboard.css">.new-task__extra { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+.new-task__priority { width: 7rem; }
+.new-task__assignee { min-width: 12rem; flex: 1; }
+.new-task__labels { min-width: 12rem; flex: 1; }
+.task-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.6rem 0 0.4rem; }
+.task-filters__select { min-width: 9.5rem; }
+.task-filters__overdue { margin-left: auto; font-size: 0.8rem; color: var(--ant-color-error, #cf1322); font-weight: 600; }
+.task__meta { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
+.task__chip { margin: 0; font-size: 0.72rem; line-height: 1.4; }
+.task__chip--label { background: var(--p-bg, #f5f5f5); }
+</style>
 <style scoped>
 .search { margin-bottom: 0.75rem; }
 .search__hint { font-size: 0.7rem; border: 1px solid var(--p-border); border-radius: 4px; padding: 0 0.3rem; }
