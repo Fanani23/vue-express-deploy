@@ -36,6 +36,8 @@
             <li class="fact"><span class="fact__icon"><LoginOutlined /></span><span class="fact__body"><span class="fact__label">Issued</span><span class="fact__value">{{ fmt(user.iat) }}</span></span></li>
             <li class="fact"><span class="fact__icon"><FieldTimeOutlined /></span><span class="fact__body"><span class="fact__label">Expires</span><span class="fact__value">{{ fmt(user.exp) }}</span></span></li>
             <li class="fact"><span class="fact__icon"><ReloadOutlined /></span><span class="fact__body"><span class="fact__label">Renewed this visit</span><span class="fact__value">{{ renewedTimes }}×</span></span></li>
+            <li class="fact"><span class="fact__icon"><HourglassOutlined /></span><span class="fact__body"><span class="fact__label">Auto sign-out</span><span class="fact__value">after {{ idleLimitLabel }} idle · idle for {{ idleFor }}</span></span></li>
+            <li class="fact"><span class="fact__icon"><SaveOutlined /></span><span class="fact__body"><span class="fact__label">Survives a refresh</span><span class="fact__value">yes — tokens kept in this browser until sign-out or {{ idleLimitLabel }} idle</span></span></li>
           </ul>
         </div>
       </a-col>
@@ -123,12 +125,14 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
-import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined, BankOutlined, UserOutlined, TeamOutlined, SafetyOutlined, CrownOutlined, TagOutlined, FileTextOutlined, MinusOutlined, DeleteOutlined, NumberOutlined } from '@ant-design/icons-vue'
+import { LogoutOutlined, ReloadOutlined, CopyOutlined, LockOutlined, MailOutlined, GoogleOutlined, SafetyCertificateOutlined, ClockCircleOutlined, LoginOutlined, FieldTimeOutlined, SettingOutlined, BgColorsOutlined, IdcardOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined, BankOutlined, UserOutlined, TeamOutlined, SafetyOutlined, CrownOutlined, TagOutlined, FileTextOutlined, MinusOutlined, DeleteOutlined, NumberOutlined, HourglassOutlined, SaveOutlined } from '@ant-design/icons-vue'
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
 import { useMainStore } from '../store.js'
 import { http } from '../../common/plugins/fetch.js'
 import { useTheme } from '../theme.js'
 import { preferencesApi, userKey, timeAgo } from '../taskpulse.js'
+import idleTimer from '@es-labs/jslib/web/idle'
+import { IDLE_LIMIT_SECONDS } from '../session.js'
 
 const store = useMainStore()
 const theme = useTheme()
@@ -148,6 +152,8 @@ const now = ref(Date.now())
 let tick
 
 const fmt = (epoch) => (epoch ? new Date(epoch * 1000).toLocaleString() : '—')
+const idleLimitLabel = IDLE_LIMIT_SECONDS % 60 === 0 ? `${IDLE_LIMIT_SECONDS / 60} min` : `${IDLE_LIMIT_SECONDS} s`
+const idleFor = computed(() => { now.value; const s = idleTimer.getIdleTimeSeconds(); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s` })
 const secondsLeft = computed(() => (user.value.exp ? Math.round(user.value.exp - now.value / 1000) : 0))
 const lifetime = computed(() => Math.max(1, (user.value.exp || 0) - (user.value.iat || 0)))
 const lifetimeMin = computed(() => Math.round(lifetime.value / 60))

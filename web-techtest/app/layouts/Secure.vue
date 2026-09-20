@@ -57,6 +57,13 @@ import { SECURE_ROUTES } from '../setups/routes.js'
 import { onLogin, onLogout } from '../setups/events.js'
 import { useTheme } from '../theme.js'
 import { preferencesApi, userKey } from '../taskpulse.js'
+import { session, IDLE_LIMIT_SECONDS } from '../session.js'
+
+if (!idleTimer._touchWrapped) {
+  const originalReset = idleTimer.reset.bind(idleTimer)
+  idleTimer.reset = () => { originalReset(); session.touch() }
+  idleTimer._touchWrapped = true
+}
 
 import idleTimer from '@es-labs/jslib/web/idle'
 
@@ -107,8 +114,11 @@ const applyServerPreferences = async () => {
 
 onMounted(async () => {
   applyServerPreferences()
-  idleTimer.timeouts.push({ time: 300, fn: () => alert('Idle Timeout Test'), stop: true })
+  idleTimer.timeouts.length = 0
+  idleTimer.timeouts.push({ time: IDLE_LIMIT_SECONDS, fn: () => store.doLogin({ forced: true, reason: 'idle' }), stop: true })
+  idleTimer.reset()
   idleTimer.start()
+  session.touch()
 
   SECURE_ROUTES.filter((r) => r.meta.layout === 'layout-secure').forEach((r) => {
     if (!r.hidden) {

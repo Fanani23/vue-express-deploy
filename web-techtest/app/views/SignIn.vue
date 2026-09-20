@@ -118,6 +118,9 @@
       </transition>
 
       <transition name="pop">
+        <a-alert v-if="infoMessage" class="auth__alert" type="info" show-icon closable :message="infoMessage" data-cy="signout-reason" @close="infoMessage = ''" />
+      </transition>
+      <transition name="pop">
         <a-alert
           v-if="errorMessage && view !== 'signup'"
           class="auth__alert"
@@ -136,6 +139,7 @@
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, onUnmounted } from 'vue'
 import { useMainStore } from '../store.js'
 import { useRoute, useRouter } from 'vue-router'
+import { session, IDLE_LIMIT_SECONDS } from '../session.js'
 import { UserOutlined, MailOutlined, LockOutlined, SafetyOutlined, GoogleOutlined, ArrowLeftOutlined } from '@ant-design/icons-vue'
 
 import parseJwt from '@es-labs/jslib/web/parse-jwt'
@@ -158,6 +162,7 @@ const route = useRoute()
 const email = ref('')
 const password = ref('')
 const errorMessage = ref('')
+const infoMessage = ref('')
 const mode = ref('login')
 const otpFixed = ref(false)
 const otp = ref('')
@@ -196,6 +201,8 @@ onMounted(async () => {
   console.log('signIn mounted!', route.hash)
   setToLogin()
   errorMessage.value = ''
+  const reason = session.takeSignOutReason()
+  infoMessage.value = reason === 'idle' ? `You were signed out after ${IDLE_LIMIT_SECONDS % 60 === 0 ? IDLE_LIMIT_SECONDS / 60 + ' minutes' : IDLE_LIMIT_SECONDS + ' seconds'} without activity.` : reason === 'expired' ? 'Your session ended — please sign in again.' : ''
   store.loading = false
   try {
     const { data } = await http.get('/api/auth/providers')
