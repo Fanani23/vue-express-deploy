@@ -237,6 +237,12 @@ chmod +x "$ROOT/taskpulse/scripts/"*.sh
 if ! SUDO_USER="${SUDO_USER:-root}" TASKPULSE_ALLOWED_ORIGINS="$WEB_ORIGIN" TASKPULSE_JWT_SECRET="$JWT_SECRET_VALUE" bash "$ROOT/taskpulse/scripts/install.sh"; then
   echo "TaskPulse install.sh failed - see output above" >&2; exit 1
 fi
+# Sign-in events (patch 0021) go to TaskPulse's audit trail with the token install.sh wrote; express reads it from its env.
+AUDIT_TOKEN="$(sed -n 's/^Api__AuditIngestToken=//p' /etc/taskpulse/api.env | head -1)"
+sed -i '/^TASKPULSE_AUDIT_/d' /etc/vt/api.env
+printf 'TASKPULSE_AUDIT_URL=http://127.0.0.1:8088/api/audit\nTASKPULSE_AUDIT_TOKEN=%s\n' "$AUDIT_TOKEN" >> /etc/vt/api.env
+systemctl restart vt-api
+
 log "TaskPulse: sample tasks through the API (scripts/seed.sh, skipped when the table is not empty)"
 bash "$ROOT/taskpulse/scripts/seed.sh" http://127.0.0.1:8088 | sed 's/^/  /'
 

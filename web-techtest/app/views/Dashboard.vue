@@ -58,6 +58,20 @@
                   </span>
                 </li>
               </ul>
+              <div v-if="admin" class="sec sec--sub">
+                <span class="sec__icon"><SafetyOutlined /></span>
+                <h3 class="sec__title">Sign-in activity</h3>
+                <span class="sec__count">{{ authEvents.length }}</span>
+              </div>
+              <ul v-if="admin" class="authlog" data-cy="auth-events">
+                <li v-for="e in authEvents" :key="e.id" class="authlog__row" :data-action="e.action">
+                  <a-tag :color="AUTH_TONE[e.action] || 'default'" class="authlog__tag">{{ e.action }}</a-tag>
+                  <span class="authlog__who">{{ e.actor || 'unknown' }}</span>
+                  <span class="page__muted authlog__what">{{ e.summary }}</span>
+                  <span class="page__muted authlog__when">{{ timeAgo(e.at) }}</span>
+                </li>
+                <li v-if="!authEvents.length" class="page__muted">No sign-in events yet — they arrive from the express API as people sign in.</li>
+              </ul>
               <form v-if="admin" class="inline-add inline-add--users" @submit.prevent="addMember" data-cy="add-user">
                 <a-input v-model:value="newMember.email" placeholder="Email" type="email" :maxlength="120" size="small" data-cy="user-email" />
                 <a-input v-model:value="newMember.username" placeholder="Name" :maxlength="64" size="small" data-cy="user-name" />
@@ -159,9 +173,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Input, message } from 'ant-design-vue'
-import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
-import { tasksApi, catalogApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
+import { tasksApi, catalogApi, auditApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
 import { usersApi, ROLES, isAdmin } from '../users.js'
 
 const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
@@ -209,12 +223,22 @@ const statCards = computed(() => {
 const fail = (e) => { error.value = e?.message || String(e) }
 const loadStats = async () => { try { stats.value = await tasksApi.stats(14) } catch (e) { stats.value = null; fail(e) } }
 const loadMembers = async () => { try { members.value = await usersApi.list() } catch (e) { fail(e) } }
+const authEvents = ref([])
+const AUTH_TONE = { signin: 'success', 'signin-failed': 'warning', 'otp-failed': 'warning', lockout: 'error', reuse: 'error', signout: 'default', 'signout-all': 'default', 'account-create': 'blue', 'account-update': 'blue', 'account-revoke': 'error', 'account-unlock': 'green', 'account-delete': 'error' }
+// Admin only: the sign-in and account events part A reports into TaskPulse's audit trail (resource auth + account).
+const loadAuthEvents = async () => {
+  if (!admin.value) return
+  try {
+    const [auth, account] = await Promise.all([auditApi.list({ resource: 'auth', limit: 12 }), auditApi.list({ resource: 'account', limit: 6 })])
+    authEvents.value = [...auth, ...account].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 12)
+  } catch { authEvents.value = [] }
+}
 const loadLinks = async () => { try { links.value = await catalogApi.list('links') } catch (e) { fail(e) } }
 const loadKinds = async () => { try { kinds.value = await catalogApi.kinds() } catch (e) { fail(e) } }
 const loadAll = async () => {
   loading.value = true
   error.value = ''
-  await Promise.all([loadStats(), loadMembers(), loadLinks(), loadKinds()])
+  await Promise.all([loadStats(), loadMembers(), loadLinks(), loadKinds(), loadAuthEvents()])
   loading.value = false
 }
 
@@ -321,6 +345,14 @@ useChangeFeed(() => loadAll())
 .member__tools { position: absolute; top: 0.25rem; right: 0.25rem; display: flex; opacity: 0; transition: opacity 0.15s; }
 .member:hover .member__tools, .member:focus-within .member__tools { opacity: 1; }
 .member--revoked { opacity: 0.55; }
+.sec--sub { margin-top: 1rem; }
+.authlog { list-style: none; margin: 0 0 0.75rem; padding: 0; display: grid; gap: 0.3rem; font-size: 0.8rem; }
+.authlog__row { display: grid; grid-template-columns: auto auto 1fr auto; gap: 0.5rem; align-items: center; }
+.authlog__tag { margin: 0; font-size: 0.7rem; line-height: 1.4; }
+.authlog__who { font-weight: 600; white-space: nowrap; }
+.authlog__what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.authlog__when { white-space: nowrap; }
+@media (max-width: 700px) { .authlog__row { grid-template-columns: auto 1fr; } .authlog__what { grid-column: 1 / -1; white-space: normal; } }
 .member__locked { margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.4; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }

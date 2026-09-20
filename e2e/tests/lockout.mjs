@@ -31,4 +31,10 @@ const after = await t.page.evaluate(() => { const c = [...document.querySelector
 t.check('unlock clears it', after === false)
 const ok = await post('/api/auth/login', { email: 'viewer@techtest.dev', password: 'Techtest123!' })
 t.check('viewer can sign in again', ok.status === 200, String(ok.status))
+
+// The whole story is in the audit trail, Admin-only (resource auth + account): failures, the lockout, the unlock.
+await sleep(1000)
+await t.go('/dashboard', 1500)
+const events = await t.page.$$eval('[data-cy=auth-events] .authlog__row', (els) => els.map((e) => e.dataset.action))
+t.check('the Dashboard shows the sign-in events to the Admin', events.includes('lockout') && events.includes('signin-failed') && events.includes('account-unlock'), events.slice(0, 8).join(' '))
 await t.done()

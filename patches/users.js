@@ -13,6 +13,9 @@ import { authFns, authUser } from '@common/node/auth';
 import { setScryptHash } from '@common/node/auth/scrypt';
 import * as s from '@common/node/services';
 import { clearLockout, lockedUntil } from '@common/node/auth/keyv';
+import { auditEvent } from '@common/node/services/audit';
+
+const admin = req => req.user?.user_meta?.email || `user ${req.user?.sub}`;
 
 const TABLE = process.env.AUTH_USER_STORE_NAME || 'users';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -86,6 +89,7 @@ const create = async (req, res) => {
       otp_pin: otpPin,
     });
     const row = await knex()(TABLE).select(PUBLIC).where({ id }).first();
+    auditEvent(req, { actor: admin(req), action: 'account-create', resource: 'account', targetId: id, summary: `created ${email} (${roles.join(', ')})` });
     return res.status(201).json({ user: toPublic(row), ...(temporaryPassword && { temporaryPassword }) });
   } catch (e) {
     if (/unique/i.test(String(e?.message))) return res.status(409).json({ message: 'An account with this email already exists' });
@@ -117,9 +121,18 @@ const update = async (req, res) => {
   let unlocked = false;
   if (req.body?.unlock) { await clearLockout(id); unlocked = true; }
   if (Object.keys(patch).length === 0 && !unlocked) return res.status(400).json({ message: 'Nothing to update' });
-  if (Object.keys(patch).length === 0) return res.status(200).json(await withLock(row));
+  if (Object.keys(patch).length === 0) {
+    auditEvent(req, { actor: admin(req), action: 'account-unlock', resource: 'account', targetId: id, summary: `${row.email}: unlocked` });
+    return res.status(200).json(await withLock(row));
+  }
   await knex()(TABLE).where({ id }).update(patch);
   if (patch.revoked) await authFns.revokeRefreshToken(String(id)); // a revoked account cannot refresh its session
+  const changes = [];
+  if (patch.username) changes.push(`name ${patch.username}`);
+  if (patch.roles) changes.push(`roles ${patch.roles}`);
+  if (req.body?.revoked != null) changes.push(req.body.revoked ? 'revoked' : 'restored');
+  if (unlocked) changes.push('unlocked');
+  auditEvent(req, { actor: admin(req), action: req.body?.revoked ? 'account-revoke' : unlocked && !Object.keys(patch).length ? 'account-unlock' : 'account-update', resource: 'account', targetId: id, summary: `${row.email}: ${changes.join(', ')}` });
   const updated = await knex()(TABLE).select(PUBLIC).where({ id }).first();
   return res.status(200).json(await withLock(updated));
 };
@@ -127,9 +140,11 @@ const update = async (req, res) => {
 const remove = async (req, res) => {
   const id = Number(req.params.id);
   if (String(req.user.sub) === String(id)) return res.status(400).json({ message: 'You cannot delete yourself' });
+  const victim = await knex()(TABLE).select(PUBLIC).where({ id }).first();
   const count = await knex()(TABLE).where({ id }).delete();
   if (!count) return res.status(404).json({ message: 'Not found' });
   await authFns.revokeRefreshToken(String(id));
+  auditEvent(req, { actor: admin(req), action: 'account-delete', resource: 'account', targetId: id, summary: `deleted ${victim?.email || id}` });
   return res.status(204).end();
 };
 

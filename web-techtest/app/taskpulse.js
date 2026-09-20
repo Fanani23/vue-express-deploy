@@ -111,6 +111,10 @@ export const catalogApi = {
   },
 }
 
+export const auditApi = {
+  list: ({ resource, limit = 20 } = {}) => request(`/api/audit?limit=${limit}${resource ? '&resource=' + resource : ''}`),
+}
+
 export const preferencesApi = {
   get: async (userId) => {
     const prefs = await request(`/api/preferences/${encodeURIComponent(userId)}`)

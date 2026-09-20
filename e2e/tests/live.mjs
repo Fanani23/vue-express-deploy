@@ -41,7 +41,7 @@ const gone = await t.page.evaluate((tt) => ![...document.querySelectorAll('.task
 t.check('optimistic delete: row gone before the server answers', gone)
 await sleep(2000)
 
-const audit = await t.page.evaluate(async (u) => (await fetch(u + '/api/audit?resource=task&limit=3')).json(), TASKPULSE)
+const audit = await t.page.evaluate(async (u) => (await fetch(u + '/api/audit?resource=task&limit=3', { headers: { Authorization: 'Bearer ' + JSON.parse(localStorage.getItem('vt.session')).tokens.access } })).json(), TASKPULSE)
 t.check('audit trail names the actor', audit.some((a) => a.action === 'delete' && a.summary === title && /@/.test(a.actor || '')), audit.map((a) => `${a.actor} ${a.action}`).join(' | '))
 
 const anon = await t.page.evaluate(async (u) => (await fetch(u + '/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"title":"x"}' })).status, TASKPULSE)
