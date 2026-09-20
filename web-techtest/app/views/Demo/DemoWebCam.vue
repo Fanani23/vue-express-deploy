@@ -17,8 +17,9 @@
         </div>
         <a-alert v-if="permission === 'denied'" type="warning" show-icon class="cam__alert" message="Camera access is blocked for this site" description="Click the camera icon in the address bar, allow access, then reload this page." />
         <a-alert v-else-if="!supported" type="error" show-icon class="cam__alert" message="This browser has no camera API (getUserMedia)." />
+        <a-alert v-else-if="hasCamera === false" type="info" show-icon class="cam__alert" message="No camera on this device" description="The camera element is not started; photos saved earlier are still listed on the right." />
         <div class="cam__frame" ref="frame">
-          <vcxwc-web-cam v-if="ready" :key="size.w" class="cam" @snap="onSnap" :width="size.w" :height="size.h">
+          <vcxwc-web-cam v-if="ready && supported && hasCamera !== false && permission !== 'denied'" :key="size.w" class="cam" @snap="onSnap" :width="size.w" :height="size.h">
             <button slot="button-unsnap" class="cam__btn"><span class="cam__btn-icon">▶</span> Start camera</button>
             <button slot="button-snap" class="cam__btn cam__btn--primary"><span class="cam__btn-icon">●</span> Take photo</button>
           </vcxwc-web-cam>
@@ -84,8 +85,18 @@ const frame = ref(null)
 const size = reactive({ w: 480, h: 360 })
 const supported = !!navigator.mediaDevices?.getUserMedia
 const permission = ref('unknown')
+const hasCamera = ref(null) // null = not checked yet
 const ready = ref(false)
 let ro
+
+// The template's element calls getUserMedia without a catch, so a missing or blocked camera surfaces as an unhandled
+// rejection. Turn that into the alert above instead of a console error (and never mount the element when there is
+// no camera to begin with).
+const onCameraRejection = (e) => {
+  const name = e.reason?.name
+  if (name === 'NotAllowedError' || name === 'SecurityError') { permission.value = 'denied'; e.preventDefault() }
+  else if (name === 'NotFoundError' || name === 'OverconstrainedError' || name === 'NotReadableError') { hasCamera.value = false; e.preventDefault() }
+}
 
 const fit = () => {
   const w = Math.max(240, Math.min(960, Math.floor((frame.value?.clientWidth || 480) - 2)))
@@ -101,10 +112,17 @@ const onSnap = (e) => {
 }
 
 onMounted(async () => {
-  fit()
+  window.addEventListener('unhandledrejection', onCameraRejection)
   loadSaved()
   ro = new ResizeObserver(fit)
   if (frame.value) ro.observe(frame.value)
+  try {
+    const devices = supported ? await navigator.mediaDevices.enumerateDevices() : []
+    hasCamera.value = devices.some((d) => d.kind === 'videoinput')
+  } catch {
+    hasCamera.value = null
+  }
+  fit()
   try {
     const status = await navigator.permissions.query({ name: 'camera' })
     permission.value = status.state
@@ -113,7 +131,7 @@ onMounted(async () => {
     permission.value = supported ? 'prompt' : 'unavailable'
   }
 })
-onBeforeUnmount(() => ro?.disconnect())
+onBeforeUnmount(() => { ro?.disconnect(); window.removeEventListener('unhandledrejection', onCameraRejection) })
 </script>
 
 <style scoped>
