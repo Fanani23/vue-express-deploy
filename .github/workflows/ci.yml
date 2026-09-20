@@ -26,6 +26,9 @@ jobs:
           for f in kit/patches/apply.sh kit/web-techtest/apply.sh kit/cloud/bootstrap.sh; do bash -n "$f"; done
           ! grep -rl $'\r' kit --include='*.sh' --include='*.service' --include='*.js' --include='*.mjs' --include='*.vue'
 
+      - name: Unit tests for the overlay modules (session, TaskPulse client, socket bus)
+        run: cd kit/web-techtest/unit && npm ci --no-audit --no-fund --loglevel=error && npm test
+
       - name: Clone es-labs/express-template at the pinned commit
         run: |
           git clone -q https://github.com/es-labs/express-template.git
