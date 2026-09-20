@@ -166,6 +166,30 @@
                 </a-upload>
               </li>
             </ul>
+            <template v-if="admin">
+              <div class="sec sec--sub">
+                <span class="sec__icon"><ApiOutlined /></span>
+                <h3 class="sec__title">Webhooks</h3>
+                <span class="sec__count">{{ hooks.length }}</span>
+              </div>
+              <ul class="hooks" data-cy="webhooks">
+                <li v-for="h in hooks" :key="h.id" class="hook" :class="{ 'hook--off': !h.active }">
+                  <span class="hook__url" :title="h.url">{{ h.url.replace(/^https?:\/\//, '') }}</span>
+                  <span class="page__muted hook__meta">{{ h.resources.length ? h.resources.join(', ') : 'all events' }} · {{ h.lastAttemptAt ? `last ${h.lastStatus || 'error'} ${timeAgo(h.lastAttemptAt)}` : 'nothing sent yet' }}<span v-if="h.consecutiveFailures" class="hook__fail"> · {{ h.consecutiveFailures }} failing</span></span>
+                  <span class="hook__tools">
+                    <a-switch size="small" :checked="h.active" :aria-label="`Webhook ${h.url} active`" @change="(v) => toggleHook(h, v)" />
+                    <a-popconfirm title="Delete this webhook?" ok-text="Delete" ok-type="danger" @confirm="removeHook(h)"><a-button size="small" type="text" danger :aria-label="`Delete webhook ${h.url}`"><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
+                  </span>
+                </li>
+                <li v-if="!hooks.length" class="page__muted">No webhooks — every change event (task, catalog, upload) can be POSTed to a URL you own, signed with a shared secret.</li>
+              </ul>
+              <form class="inline-add inline-add--hook" @submit.prevent="addHook" data-cy="add-webhook">
+                <a-input v-model:value="newHook.url" placeholder="https://receiver.example/hook" size="small" data-cy="hook-url" />
+                <a-input-password v-model:value="newHook.secret" placeholder="Secret (16+ chars, signs each delivery)" size="small" data-cy="hook-secret" />
+                <a-select v-model:value="newHook.resources" mode="multiple" size="small" placeholder="All events" :options="['task', 'catalog', 'upload', 'preferences'].map((r) => ({ value: r, label: r }))" data-a11y-label="Webhook events" class="inline-add__select" />
+                <a-button size="small" type="primary" html-type="submit" :disabled="!/^https?:\/\//.test(newHook.url) || newHook.secret.length < 16" :loading="busy.hook" data-cy="hook-add"><template #icon><PlusOutlined /></template>Add</a-button>
+              </form>
+            </template>
             <p class="page__note">Every list on the demo pages lives in <code>/api/catalog</code>; click a kind to open the page that edits it.</p>
           </div>
         </div>
@@ -177,9 +201,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Input, message } from 'ant-design-vue'
-import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined, DownloadOutlined, UploadOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
-import { tasksApi, catalogApi, auditApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
+import { tasksApi, catalogApi, auditApi, webhooksApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
 import { usersApi, ROLES, isAdmin } from '../users.js'
 
 const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
@@ -199,7 +223,7 @@ const stats = ref(null)
 const members = ref([])
 const links = ref([])
 const kinds = ref([])
-const busy = reactive({ member: false, link: false })
+const busy = reactive({ member: false, link: false, hook: false })
 const newMember = reactive({ email: '', username: '', role: 'Viewer', demo: false })
 const newLink = reactive({ label: '', url: '' })
 
@@ -228,6 +252,20 @@ const fail = (e) => { error.value = e?.message || String(e) }
 const loadStats = async () => { try { stats.value = await tasksApi.stats(14) } catch (e) { stats.value = null; fail(e) } }
 const loadMembers = async () => { try { members.value = await usersApi.list() } catch (e) { fail(e) } }
 const authEvents = ref([])
+const hooks = ref([])
+const newHook = reactive({ url: '', secret: '', resources: [] })
+const loadHooks = async () => { if (!admin.value) return; try { hooks.value = await webhooksApi.list() } catch { hooks.value = [] } }
+const addHook = async () => {
+  busy.hook = true
+  try {
+    await webhooksApi.create({ url: newHook.url.trim(), secret: newHook.secret, resources: newHook.resources })
+    newHook.url = ''; newHook.secret = ''; newHook.resources = []
+    message.success('Webhook added - the next change will be delivered to it')
+    await loadHooks()
+  } catch (e) { fail(e) } finally { busy.hook = false }
+}
+const toggleHook = async (h, active) => { try { await webhooksApi.update(h.id, { active }); await loadHooks() } catch (e) { fail(e) } }
+const removeHook = async (h) => { try { await webhooksApi.remove(h.id); await loadHooks() } catch (e) { fail(e) } }
 const AUTH_TONE = { signin: 'success', 'signin-failed': 'warning', 'otp-failed': 'warning', lockout: 'error', reuse: 'error', signout: 'default', 'signout-all': 'default', 'account-create': 'blue', 'account-update': 'blue', 'account-revoke': 'error', 'account-unlock': 'green', 'account-delete': 'error' }
 // Admin only: the sign-in and account events part A reports into TaskPulse's audit trail (resource auth + account).
 const loadAuthEvents = async () => {
@@ -242,7 +280,7 @@ const loadKinds = async () => { try { kinds.value = await catalogApi.kinds() } c
 const loadAll = async () => {
   loading.value = true
   error.value = ''
-  await Promise.all([loadStats(), loadMembers(), loadLinks(), loadKinds(), loadAuthEvents()])
+  await Promise.all([loadStats(), loadMembers(), loadLinks(), loadKinds(), loadAuthEvents(), loadHooks()])
   loading.value = false
 }
 
@@ -367,6 +405,15 @@ useChangeFeed(() => loadAll())
 @media (max-width: 700px) { .authlog__row { grid-template-columns: auto 1fr; } .authlog__what { grid-column: 1 / -1; white-space: normal; } }
 .member__locked { margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.4; }
 .kind__csv { margin-left: 0.4rem; opacity: 0.6; } .kind__csv:hover { opacity: 1; }
+.hooks { list-style: none; margin: 0 0 0.6rem; padding: 0; display: grid; gap: 0.35rem; font-size: 0.82rem; }
+.hook { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'url tools' 'meta tools'; gap: 0 0.5rem; padding: 0.45rem 0.6rem; border: 1px solid var(--p-border); border-radius: 10px; background: var(--p-bg); }
+.hook--off { opacity: 0.55; }
+.hook__url { grid-area: url; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hook__meta { grid-area: meta; font-size: 0.76rem; }
+.hook__fail { color: var(--ant-color-error, #cf1322); }
+.hook__tools { grid-area: tools; display: inline-flex; align-items: center; gap: 0.3rem; }
+.inline-add--hook { grid-template-columns: 1.4fr 1fr auto auto; }
+.inline-add__select { min-width: 9rem; }
 .kind__import { margin-left: 0.1rem; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }

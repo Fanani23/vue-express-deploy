@@ -126,6 +126,14 @@ export const catalogApi = {
   },
 }
 
+export const webhooksApi = {
+  list: () => request('/api/webhooks'),
+  create: (hook) => request('/api/webhooks', { method: 'POST', body: JSON.stringify(hook) }),
+  update: (id, patch) => request(`/api/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(patch) }),
+  remove: (id) => request(`/api/webhooks/${id}`, { method: 'DELETE' }),
+  deliveries: (id) => request(`/api/webhooks/${id}/deliveries`),
+}
+
 export const auditApi = {
   list: ({ resource, limit = 20 } = {}) => request(`/api/audit?limit=${limit}${resource ? '&resource=' + resource : ''}`),
 }

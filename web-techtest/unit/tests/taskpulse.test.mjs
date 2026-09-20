@@ -199,3 +199,65 @@ describe('more of the REST surface', () => {
     expect(fetch.mock.calls[1][0]).toBe('http://taskpulse.test/api/catalog')
   })
 })
+
+describe('task fields, CSV, audit and webhooks', () => {
+  it('list and exportUrl carry the same filters', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, { items: [], total: 0 }))
+    await mod.tasksApi.list({ status: 'Todo', q: ' x ', priority: 'High', assignee: 'me', label: 'ops', due: 'overdue', page: 2 })
+    expect(fetch.mock.calls[0][0]).toBe('http://taskpulse.test/api/tasks?page=2&pageSize=10&status=Todo&q=x&priority=High&assignee=me&label=ops&due=overdue')
+    expect(mod.tasksApi.exportUrl({ status: 'Todo', label: 'ops', due: 'week' })).toBe('http://taskpulse.test/api/tasks/export.csv?status=Todo&label=ops&due=week')
+    expect(mod.tasksApi.exportUrl()).toBe('http://taskpulse.test/api/tasks/export.csv')
+    expect(mod.catalogApi.exportUrl('places')).toBe('http://taskpulse.test/api/catalog/places/export.csv')
+  })
+  it('patch sends the whole task with the change on top (PUT replaces)', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, {}))
+    const task = { id: 't1', title: 'a', status: 'Todo', labels: ['x'], assigneeId: '4', assigneeName: 'Ann' }
+    await mod.tasksApi.patch(task, { status: 'Done' })
+    const [url, init] = fetch.mock.calls[0]
+    expect(url).toBe('http://taskpulse.test/api/tasks/t1')
+    expect(init.method).toBe('PUT')
+    expect(JSON.parse(init.body)).toEqual({ title: 'a', description: null, status: 'Done', priority: 'Normal', dueAt: null, assigneeId: '4', assigneeName: 'Ann', labels: ['x'] })
+    await mod.tasksApi.get('t1'); await mod.tasksApi.stats(7); await mod.tasksApi.create({ title: 'n' }); await mod.tasksApi.update('t1', {}); await mod.tasksApi.remove('t1')
+    expect(fetch.mock.calls.map(([u, i]) => `${i?.method || 'GET'} ${u.replace('http://taskpulse.test', '')}`).slice(1))
+      .toEqual(['GET /api/tasks/t1', 'GET /api/tasks/stats?days=7', 'POST /api/tasks', 'PUT /api/tasks/t1', 'DELETE /api/tasks/t1'])
+  })
+  it('isOverdue and dueLabel', () => {
+    const day = 86_400_000
+    expect(mod.isOverdue({ status: 'Todo', dueAt: new Date(Date.now() - day).toISOString() })).toBeTruthy()
+    expect(mod.isOverdue({ status: 'Done', dueAt: new Date(Date.now() - day).toISOString() })).toBeFalsy()
+    expect(mod.isOverdue({ status: 'Todo' })).toBeFalsy()
+    expect(mod.dueLabel('')).toBe('')
+    expect(mod.dueLabel(new Date().toISOString())).toBe('today')
+    expect(mod.dueLabel(new Date(Date.now() + day).toISOString())).toBe('tomorrow')
+    expect(mod.dueLabel(new Date(Date.now() - day).toISOString())).toBe('yesterday')
+    expect(mod.dueLabel(new Date(Date.now() - 3 * day).toISOString())).toBe('3 d overdue')
+    expect(mod.dueLabel(new Date(Date.now() + 3 * day).toISOString())).toBe('in 3 d')
+    expect(mod.dueLabel(new Date(Date.now() + 40 * day).toISOString())).toMatch(/\d/)
+  })
+  it('CSV import posts the file as multipart and returns the per-row report', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, { created: 1, updated: 0, skipped: [{ row: 3, error: 'title is required' }] }))
+    const file = new File(['title\nx\n'], 't.csv', { type: 'text/csv' })
+    await expect(mod.tasksApi.importCsv(file)).resolves.toMatchObject({ created: 1 })
+    expect(fetch.mock.calls[0][0]).toBe('http://taskpulse.test/api/tasks/import')
+    expect(fetch.mock.calls[0][1].body.get('file').name).toBe('t.csv')
+    await mod.catalogApi.importCsv('places', file)
+    expect(fetch.mock.calls[1][0]).toBe('http://taskpulse.test/api/catalog/places/import')
+  })
+  it('audit list and the webhooks client hit the right routes', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, []))
+    await mod.auditApi.list({ resource: 'auth', limit: 5 })
+    await mod.auditApi.list()
+    await mod.webhooksApi.list()
+    await mod.webhooksApi.create({ url: 'https://h', secret: 's' })
+    await mod.webhooksApi.update('w1', { active: false })
+    await mod.webhooksApi.deliveries('w1')
+    await mod.webhooksApi.remove('w1')
+    await mod.catalogApi.get('places', 'p1'); await mod.catalogApi.create('places', {}); await mod.catalogApi.update('places', 'p1', {}); await mod.catalogApi.remove('places', 'p1')
+    expect(fetch.mock.calls.map(([u, i]) => `${i?.method || 'GET'} ${u.replace('http://taskpulse.test', '')}`)).toEqual([
+      'GET /api/audit?limit=5&resource=auth', 'GET /api/audit?limit=20',
+      'GET /api/webhooks', 'POST /api/webhooks', 'PUT /api/webhooks/w1', 'GET /api/webhooks/w1/deliveries', 'DELETE /api/webhooks/w1',
+      'GET /api/catalog/places/p1', 'POST /api/catalog/places', 'PUT /api/catalog/places/p1', 'DELETE /api/catalog/places/p1',
+    ])
+    expect(JSON.parse(fetch.mock.calls[4][1].body)).toEqual({ active: false })
+  })
+})
