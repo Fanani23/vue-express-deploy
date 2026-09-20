@@ -66,7 +66,8 @@ const createOnce = async (path, body, key = newIdempotencyKey()) => {
 }
 
 export const tasksApi = {
-  list: ({ status, q: search, page = 1, pageSize = 10, priority, assignee, label, due } = {}) => {
+  // `cursor` (the previous page's nextCursor) continues by keyset: stable while others insert, no deep OFFSET
+  list: ({ status, q: search, page = 1, pageSize = 10, priority, assignee, label, due, cursor } = {}) => {
     const q = new URLSearchParams({ page, pageSize })
     if (status) q.set('status', status)
     if (search && search.trim()) q.set('q', search.trim())
@@ -74,6 +75,7 @@ export const tasksApi = {
     if (assignee) q.set('assignee', assignee)
     if (label) q.set('label', label)
     if (due) q.set('due', due)
+    if (cursor) q.set('cursor', cursor)
     return request(`/api/tasks?${q}`)
   },
   get: (id) => request(`/api/tasks/${id}`),

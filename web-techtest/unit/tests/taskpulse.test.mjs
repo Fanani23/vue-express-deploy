@@ -290,3 +290,11 @@ describe('idempotent creates', () => {
     expect(fetch.mock.calls[0][1].headers['Idempotency-Key']).toBe('my-key')
   })
 })
+
+describe('cursor paging', () => {
+  it('passes the previous page\'s cursor through', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, { items: [], total: 0, nextCursor: null }))
+    await mod.tasksApi.list({ page: 2, pageSize: 8, cursor: 'abc' })
+    expect(fetch.mock.calls[0][0]).toBe('http://taskpulse.test/api/tasks?page=2&pageSize=8&cursor=abc')
+  })
+})

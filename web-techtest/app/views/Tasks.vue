@@ -134,7 +134,7 @@
               <a-tooltip title="First page"><a-button size="small" :disabled="page <= 1" @click="goTo(1)"><template #icon><DoubleLeftOutlined /></template></a-button></a-tooltip>
               <a-tooltip title="Previous"><a-button size="small" :disabled="page <= 1" @click="goTo(page - 1)"><template #icon><LeftOutlined /></template></a-button></a-tooltip>
               <button v-for="n in pageItems" :key="n" type="button" class="pager__page" :class="{ 'pager__page--on': n === page }" @click="goTo(n)">{{ n }}</button>
-              <a-tooltip title="Next"><a-button size="small" :disabled="page >= pageCount" @click="goTo(page + 1)"><template #icon><RightOutlined /></template></a-button></a-tooltip>
+              <a-tooltip title="Next (continues after the last row shown, even if tasks were added meanwhile)"><a-button size="small" :disabled="page >= pageCount" data-cy="pager-next" @click="goNext()"><template #icon><RightOutlined /></template></a-button></a-tooltip>
               <a-tooltip title="Last page"><a-button size="small" :disabled="page >= pageCount" @click="goTo(pageCount)"><template #icon><DoubleRightOutlined /></template></a-button></a-tooltip>
             </div>
           </div>
@@ -266,12 +266,16 @@ const loadCounts = async () => {
   try { counts.value = await tasksApi.counts({ q: appliedSearch.value }) } catch (e) { fail(e) }
 }
 
-const loadTasks = async () => {
+// "Next" continues from the last row shown (the API's keyset cursor), so a task created or moved by someone else
+// while you read never makes a row repeat or vanish between pages; jumping to a page number is by offset.
+const nextCursor = ref(null)
+const loadTasks = async (cursor = null) => {
   loading.value = true
   try {
-    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value, ...extra })
+    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value, cursor, ...extra })
     tasks.value = res.items
     total.value = res.total
+    nextCursor.value = res.nextCursor
     if (res.items.length === 0 && page.value > 1) { page.value = 1; await loadTasks() }
   } catch (e) { fail(e) } finally { loading.value = false }
 }
@@ -288,6 +292,7 @@ const pageItems = computed(() => {
   return Array.from({ length: Math.min(3, n) }, (_, i) => start + i)
 })
 const goTo = (p) => { page.value = Math.min(Math.max(1, p), pageCount.value); loadTasks() }
+const goNext = () => { if (page.value >= pageCount.value) return; page.value++; loadTasks(nextCursor.value) }
 watch(pageSize, () => { page.value = 1; loadTasks() })
 
 const announce = (what, task) => ws.broadcast(`task:${what} "${task.title}"`)
