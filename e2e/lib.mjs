@@ -5,6 +5,8 @@ export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export const BASE = (process.env.E2E_BASE || 'http://127.0.0.1:8080').replace(/\/$/, '')
 export const TASKPULSE = (process.env.E2E_TASKPULSE || 'http://127.0.0.1:8088').replace(/\/$/, '')
+// The express API: same origin as the portal behind nginx, :3000 next to the Vite dev server locally.
+export const API = (process.env.E2E_API || (/127\.0\.0\.1:8080$/.test(BASE) ? 'http://127.0.0.1:3000' : BASE)).replace(/\/$/, '')
 export const USER = process.env.E2E_USER || 'admin@techtest.dev'
 export const PASSWORD = process.env.E2E_PASSWORD || 'Techtest123!'
 export const CODE = process.env.E2E_CODE || '111111'

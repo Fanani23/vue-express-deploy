@@ -2,6 +2,7 @@
 # Runs every e2e script against a running stack. Environment:
 #   E2E_BASE         portal URL            (default http://127.0.0.1:8080)
 #   E2E_TASKPULSE    TaskPulse URL         (default http://127.0.0.1:8088)
+#   E2E_API          express API URL       (default: the portal origin; http://127.0.0.1:3000 for the local dev server)
 #   E2E_USER / E2E_PASSWORD / E2E_CODE     (default admin@techtest.dev / Techtest123! / 111111)
 #   E2E_BROWSER_URL  connect to a running Chrome (http://127.0.0.1:9333) instead of launching one
 #   E2E_CHROME       Chrome/Chromium executable to launch (default: first of google-chrome, chromium, chromium-browser)
