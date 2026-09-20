@@ -42,25 +42,28 @@
               <div class="sec">
                 <span class="sec__icon"><TeamOutlined /></span>
                 <h3 class="sec__title">Team Members</h3>
-                <span class="sec__count">{{ members.length }}</span>
+                <span class="sec__count">{{ members.length }} account{{ members.length === 1 ? '' : 's' }}</span>
               </div>
-              <div v-if="!members.length && !loading" class="empty"><TeamOutlined class="empty__icon" /><span>No members yet</span><span class="empty__hint">Add the first one below.</span></div>
-              <ul v-else class="team">
-                <li v-for="m in members" :key="m.code" class="member">
-                  <span class="member__avatar" :style="{ background: hue(m.label) }">{{ m.label.slice(0, 1).toUpperCase() }}</span>
-                  <span class="member__name">{{ m.label }}</span>
-                  <span class="member__title">{{ m.attributes?.title || 'no title' }}</span>
-                  <span class="member__tools">
+              <div v-if="!members.length && !loading" class="empty"><TeamOutlined class="empty__icon" /><span>No accounts yet</span><span class="empty__hint">{{ admin ? 'Add the first one below.' : 'Ask an Admin to add one.' }}</span></div>
+              <ul v-else class="team" data-cy="team">
+                <li v-for="m in members" :key="m.id" class="member" :class="{ 'member--revoked': m.revoked, 'member--me': m.id === myId }" :title="m.email">
+                  <span class="member__avatar" :style="{ background: hue(m.email) }">{{ m.username.slice(0, 1).toUpperCase() }}</span>
+                  <span class="member__name">{{ m.username }}<span v-if="m.id === myId" class="member__you"> (you)</span></span>
+                  <span class="member__title">{{ m.revoked ? 'revoked' : m.roles.join(', ') || 'no role' }}</span>
+                  <span v-if="admin" class="member__tools">
                     <a-tooltip title="Edit"><a-button size="small" type="text" @click="editMember(m)"><template #icon><EditOutlined /></template></a-button></a-tooltip>
-                    <a-popconfirm title="Remove this member?" ok-text="Remove" ok-type="danger" @confirm="removeMember(m)"><a-button size="small" type="text" danger><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
+                    <a-popconfirm v-if="m.id !== myId" title="Delete this account? Their session is revoked too." ok-text="Delete" ok-type="danger" @confirm="removeMember(m)"><a-button size="small" type="text" danger><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
                   </span>
                 </li>
               </ul>
-              <form class="inline-add" @submit.prevent="addMember">
-                <a-input v-model:value="newMember.name" placeholder="Name" :maxlength="120" size="small" />
-                <a-input v-model:value="newMember.title" placeholder="Role" :maxlength="60" size="small" />
-                <a-button size="small" type="primary" html-type="submit" :disabled="!newMember.name.trim()" :loading="busy.member"><template #icon><PlusOutlined /></template>Add</a-button>
+              <form v-if="admin" class="inline-add inline-add--users" @submit.prevent="addMember" data-cy="add-user">
+                <a-input v-model:value="newMember.email" placeholder="Email" type="email" :maxlength="120" size="small" data-cy="user-email" />
+                <a-input v-model:value="newMember.username" placeholder="Name" :maxlength="64" size="small" data-cy="user-name" />
+                <a-select v-model:value="newMember.role" size="small" :options="ROLES.map((r) => ({ value: r, label: r }))" data-a11y-label="Role" />
+                <a-button size="small" type="primary" html-type="submit" :disabled="!validEmail(newMember.email)" :loading="busy.member" data-cy="user-add"><template #icon><PlusOutlined /></template>Add</a-button>
+                <a-checkbox v-model:checked="newMember.demo" class="inline-add__note">Demo account (sign-in code <code>111111</code> instead of an email code)</a-checkbox>
               </form>
+              <p v-else class="inline-add__note">Real accounts on the express API (<code>/api/users</code>); only an Admin can add, change or delete them.</p>
             </div>
           </a-col>
           <a-col :xs="24" :md="12">
@@ -157,14 +160,18 @@ import { Modal, Input, message } from 'ant-design-vue'
 import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
 import { tasksApi, catalogApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
+import { usersApi, ROLES, isAdmin } from '../users.js'
 
-const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', members: '/dashboard', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
+const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
 
 const store = useMainStore()
 const identity = computed(() => store.user?.nickname || store.user?.user_meta?.email || store.user?.username || 'there')
 const firstName = computed(() => identity.value.replace(/@.*/, ''))
 const greeting = computed(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening' })
 const hue = (name) => `hsl(${[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360} 55% 45%)`
+const admin = computed(() => isAdmin(store.user))
+const myId = computed(() => Number(store.user?.sub))
+const validEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e || '').trim())
 
 const loading = ref(false)
 const error = ref('')
@@ -173,7 +180,7 @@ const members = ref([])
 const links = ref([])
 const kinds = ref([])
 const busy = reactive({ member: false, link: false })
-const newMember = reactive({ name: '', title: '' })
+const newMember = reactive({ email: '', username: '', role: 'Viewer', demo: false })
 const newLink = reactive({ label: '', url: '' })
 
 const recent = computed(() => stats.value?.recentlyUpdated || [])
@@ -199,7 +206,7 @@ const statCards = computed(() => {
 
 const fail = (e) => { error.value = e?.message || String(e) }
 const loadStats = async () => { try { stats.value = await tasksApi.stats(14) } catch (e) { stats.value = null; fail(e) } }
-const loadMembers = async () => { try { members.value = await catalogApi.list('members') } catch (e) { fail(e) } }
+const loadMembers = async () => { try { members.value = await usersApi.list() } catch (e) { fail(e) } }
 const loadLinks = async () => { try { links.value = await catalogApi.list('links') } catch (e) { fail(e) } }
 const loadKinds = async () => { try { kinds.value = await catalogApi.kinds() } catch (e) { fail(e) } }
 const loadAll = async () => {
@@ -220,20 +227,32 @@ const twoFieldModal = (title, fields, onOk) => {
   })
 }
 
+// Accounts are created with a one-time temporary password (shown once, here) and either an emailed sign-in code
+// or - for demo accounts without a real mailbox - the fixed code 111111.
 const addMember = async () => {
-  if (!newMember.name.trim()) return
+  if (!validEmail(newMember.email)) return
   busy.member = true
   try {
-    await catalogApi.create('members', { label: newMember.name.trim(), attributes: { title: newMember.title.trim() || 'Team member' }, sort: members.value.length + 1 })
-    newMember.name = ''; newMember.title = ''
-    await Promise.all([loadMembers(), loadKinds()])
+    const { user, temporaryPassword } = await usersApi.create({ email: newMember.email.trim(), username: newMember.username.trim() || undefined, roles: [newMember.role], otpPin: newMember.demo ? '111111' : undefined })
+    newMember.email = ''; newMember.username = ''; newMember.demo = false
+    await loadMembers()
+    Modal.success({
+      title: `${user.username} can sign in now`,
+      content: () => h('div', { class: 'modal-fields' }, [
+        h('p', `Email: ${user.email} · role: ${user.roles.join(', ')}`),
+        h('p', 'Temporary password (shown once - copy it now):'),
+        h(Input, { value: temporaryPassword, readonly: true, 'data-cy': 'temp-password' }),
+        h('p', { class: 'muted' }, user.roles && newMember.demo ? '' : 'The sign-in code goes to that mailbox.'),
+      ]),
+      okText: 'Done',
+    })
   } catch (e) { fail(e) } finally { busy.member = false }
 }
-const editMember = (m) => twoFieldModal('Edit member', [{ key: 'name', value: m.label, placeholder: 'Name', max: 120 }, { key: 'title', value: m.attributes?.title || '', placeholder: 'Role', max: 60 }], async (v) => {
-  if (!v.name.trim()) return
-  try { await catalogApi.update('members', m.code, { label: v.name.trim(), attributes: { title: v.title.trim() || 'Team member' }, sort: m.sort }); await loadMembers() } catch (e) { fail(e) }
+const editMember = (m) => twoFieldModal('Edit account', [{ key: 'username', value: m.username, placeholder: 'Name', max: 64 }, { key: 'roles', value: m.roles.join(','), placeholder: 'Roles (comma separated: Admin, TestGroup, Viewer)', max: 120 }], async (v) => {
+  if (!v.username.trim()) return
+  try { await usersApi.update(m.id, { username: v.username.trim(), roles: v.roles }); await loadMembers() } catch (e) { fail(e) }
 })
-const removeMember = async (m) => { try { await catalogApi.remove('members', m.code); await Promise.all([loadMembers(), loadKinds()]) } catch (e) { fail(e) } }
+const removeMember = async (m) => { try { await usersApi.remove(m.id); await loadMembers() } catch (e) { fail(e) } }
 
 const validUrl = (u) => /^(https?:\/\/|\/)/.test((u || '').trim())
 const linkHref = (l) => l.attributes?.url || '#'
@@ -298,6 +317,11 @@ useChangeFeed(() => loadAll())
 .member__title { font-size: 0.78rem; color: var(--p-muted); }
 .member__tools { position: absolute; top: 0.25rem; right: 0.25rem; display: flex; opacity: 0; transition: opacity 0.15s; }
 .member:hover .member__tools, .member:focus-within .member__tools { opacity: 1; }
+.member--revoked { opacity: 0.55; }
+.member--me { border-color: var(--p-primary, #1677ff); }
+.member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }
+.inline-add--users { grid-template-columns: 1.4fr 1fr auto auto; }
+.inline-add__note { grid-column: 1 / -1; margin: 0.3rem 0 0; font-size: 0.78rem; color: var(--p-muted, #8c8c8c); }
 .inline-add { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.4rem; }
 .inline-add--col { grid-template-columns: 1fr; }
 
