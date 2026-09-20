@@ -39,6 +39,10 @@
             <span class="sec__count">{{ total }}</span>
             <a-segmented v-model:value="filter" :options="segments" size="small" data-cy="filter" />
           </div>
+          <a-input v-model:value="search" data-cy="search" placeholder="Search title or description…" allow-clear class="search" @pressEnter="applySearch">
+            <template #prefix><SearchOutlined class="new-task__icon" /></template>
+            <template #suffix><span v-if="search && search !== appliedSearch" class="page__muted search__hint">Enter</span></template>
+          </a-input>
 
           <form class="new-task" @submit.prevent="createTask">
             <a-input v-model:value="draft.title" data-cy="new-title" placeholder="What needs doing?" :maxlength="200" size="large">
@@ -90,7 +94,7 @@
               </template>
             </template>
             <template #emptyText>
-              <div class="empty"><InboxOutlined class="empty__icon" /><span>{{ filter === 'all' ? 'No tasks yet' : `Nothing ${STATUS_LABEL[filter].toLowerCase()}` }}</span><span class="empty__hint">{{ filter === 'all' ? 'Add the first one above.' : 'Pick another filter or add a task.' }}</span></div>
+              <div class="empty"><InboxOutlined class="empty__icon" /><span>{{ appliedSearch ? `No task matches “${appliedSearch}”` : filter === 'all' ? 'No tasks yet' : `Nothing ${STATUS_LABEL[filter].toLowerCase()}` }}</span><span class="empty__hint">{{ appliedSearch ? 'The search runs on the server over title and description.' : filter === 'all' ? 'Add the first one above.' : 'Pick another filter or add a task.' }}</span></div>
             </template>
           </a-table>
           <div v-if="total > 0" class="pager">
@@ -146,7 +150,8 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined } from '@ant-design/icons-vue'
+import { useRoute } from 'vue-router'
+import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { tasksApi, useTaskPulseSocket, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../taskpulse.js'
 
 const api = tasksApi.urls.api
@@ -157,6 +162,13 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(8)
 const filter = ref('all')
+const route = useRoute()
+const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
+const appliedSearch = ref(search.value)
+let searchTimer = null
+const applySearch = () => { clearTimeout(searchTimer); appliedSearch.value = search.value.trim() }
+watch(search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(applySearch, 350) })
+watch(appliedSearch, () => { page.value = 1; refresh() })
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
@@ -187,13 +199,13 @@ const barWidth = (key) => {
 const fail = (e) => { error.value = e?.message || String(e) }
 
 const loadCounts = async () => {
-  try { counts.value = await tasksApi.counts() } catch (e) { fail(e) }
+  try { counts.value = await tasksApi.counts({ q: appliedSearch.value }) } catch (e) { fail(e) }
 }
 
 const loadTasks = async () => {
   loading.value = true
   try {
-    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, page: page.value, pageSize: pageSize.value })
+    const res = await tasksApi.list({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, page: page.value, pageSize: pageSize.value })
     tasks.value = res.items
     total.value = res.total
     if (res.items.length === 0 && page.value > 1) { page.value = 1; await loadTasks() }
@@ -264,3 +276,7 @@ onMounted(async () => {
 </script>
 
 <style src="../style/dashboard.css"></style>
+<style scoped>
+.search { margin-bottom: 0.75rem; }
+.search__hint { font-size: 0.7rem; border: 1px solid var(--p-border); border-radius: 4px; padding: 0 0.3rem; }
+</style>

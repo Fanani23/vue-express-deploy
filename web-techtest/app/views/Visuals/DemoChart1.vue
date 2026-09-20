@@ -3,10 +3,10 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">Chart.js</h1>
-        <p class="page__subtitle">The template's Chart.js sample, now fed by TaskPulse instead of three hard-coded numbers. Switch the chart type and see the same data re-drawn.</p>
+        <p class="page__subtitle">The template's Chart.js sample, fed by <code>/api/tasks/stats</code> instead of three hard-coded numbers. Switch the chart type and see the same data re-drawn.</p>
       </div>
       <div class="chart-tools">
-        <a-tag class="pill" :color="loading ? 'processing' : tasks.length ? 'success' : 'default'"><DatabaseOutlined />{{ loading ? 'loading' : `${tasks.length} tasks` }}</a-tag>
+        <a-tag class="pill" :color="loading ? 'processing' : total ? 'success' : 'default'"><DatabaseOutlined />{{ loading ? 'loading' : `${total} tasks` }}</a-tag>
         <div class="chart-types">
           <a-tooltip v-for="t in types" :key="t.value" :title="t.label">
             <button type="button" class="chart-type" :class="{ 'chart-type--on': type === t.value }" :aria-pressed="type === t.value" @click="type = t.value"><component :is="t.icon" /><span>{{ t.label }}</span></button>
@@ -16,14 +16,14 @@
       </div>
     </header>
 
-    <div v-if="!loading && !tasks.length" class="page__card"><div class="empty"><BarChartOutlined class="empty__icon" /><span>No tasks to chart</span><span class="empty__hint">Add a few on the Tasks page, then refresh.</span></div></div>
+    <div v-if="!loading && !total" class="page__card"><div class="empty"><BarChartOutlined class="empty__icon" /><span>No tasks to chart</span><span class="empty__hint">Add a few on the Tasks page, then refresh.</span></div></div>
     <div v-else class="chart-grid">
       <div class="page__card">
         <div class="sec"><span class="sec__icon"><PieChartOutlined /></span><h3 class="sec__title">Tasks by status</h3><span class="sec__count">{{ type }}</span></div>
         <div class="chart chart--bars"><canvas ref="c1"></canvas></div>
       </div>
       <div class="page__card">
-        <div class="sec"><span class="sec__icon"><FontSizeOutlined /></span><h3 class="sec__title">Title length distribution</h3><span class="sec__count">characters</span></div>
+        <div class="sec"><span class="sec__icon"><CalendarOutlined /></span><h3 class="sec__title">Created per day</h3><span class="sec__count">last 14 days</span></div>
         <div class="chart chart--bars"><canvas ref="c2"></canvas></div>
       </div>
     </div>
@@ -31,10 +31,10 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import Chart from 'chart.js/auto'
 import { tasksApi, STATUSES, STATUS_LABEL } from '../../taskpulse.js'
-import { DatabaseOutlined, ReloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, RadarChartOutlined, FontSizeOutlined } from '@ant-design/icons-vue'
+import { DatabaseOutlined, ReloadOutlined, BarChartOutlined, LineChartOutlined, PieChartOutlined, RadarChartOutlined, CalendarOutlined } from '@ant-design/icons-vue'
 import { useTheme } from '../../theme.js'
 
 const { isDark } = useTheme()
@@ -46,7 +46,8 @@ const types = [
   { value: 'doughnut', label: 'Doughnut', icon: PieChartOutlined },
   { value: 'polarArea', label: 'Polar', icon: RadarChartOutlined },
 ]
-const tasks = ref([])
+const stats = ref(null)
+const total = computed(() => stats.value?.total || 0)
 const loading = ref(false)
 const c1 = ref(null)
 const c2 = ref(null)
@@ -59,15 +60,9 @@ const textColor = () => (isDark.value ? '#9aa3b0' : '#5f6672')
 const load = async () => {
   loading.value = true
   try {
-    const all = []
-    for (let page = 1; page <= 20; page++) {
-      const res = await tasksApi.list({ page, pageSize: 100 })
-      all.push(...res.items)
-      if (all.length >= res.total || !res.items.length) break
-    }
-    tasks.value = all
+    stats.value = await tasksApi.stats(14)
   } catch {
-    tasks.value = []
+    stats.value = null
   } finally {
     loading.value = false
   }
@@ -75,13 +70,14 @@ const load = async () => {
 
 const dataset1 = () => ({
   labels: STATUSES.map((s) => STATUS_LABEL[s]),
-  datasets: [{ label: 'Tasks', data: STATUSES.map((s) => tasks.value.filter((t) => t.status === s).length), backgroundColor: colors.slice(0, 3), borderRadius: 6 }],
+  datasets: [{ label: 'Tasks', data: STATUSES.map((s) => stats.value?.byStatus?.[s] || 0), backgroundColor: colors.slice(0, 3), borderRadius: 6 }],
 })
-const buckets = ['≤10', '11–20', '21–30', '31–40', '41+']
 const dataset2 = () => {
-  const counts = [0, 0, 0, 0, 0]
-  for (const t of tasks.value) counts[Math.min(4, Math.floor(Math.max(0, t.title.length - 1) / 10))]++
-  return { labels: buckets, datasets: [{ label: 'Tasks', data: counts, backgroundColor: colors, borderRadius: 6 }] }
+  const rows = stats.value?.daily || []
+  return {
+    labels: rows.map((r) => new Date(r.date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })),
+    datasets: [{ label: 'Created', data: rows.map((r) => r.created), backgroundColor: rows.map((_, i) => colors[i % colors.length]), borderColor: colors[1], borderRadius: 6 }],
+  }
 }
 
 const options = () => {
@@ -101,7 +97,7 @@ const draw = () => {
   chart2 = new Chart(c2.value, { type: type.value, data: dataset2(), options: options() })
 }
 
-watch([tasks, type, isDark], () => nextTick(draw))
+watch([stats, type, isDark], () => nextTick(draw))
 onMounted(load)
 onBeforeUnmount(() => { chart1?.destroy(); chart2?.destroy() })
 </script>

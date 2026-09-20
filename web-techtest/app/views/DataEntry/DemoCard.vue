@@ -6,6 +6,7 @@
         <p class="page__subtitle">The template's card grid, with real content: every TaskPulse task as a card on a three-column board. Drag a card to another column, or use its buttons.</p>
       </div>
       <div class="page__actions">
+        <a-input v-model:value="search" placeholder="Search cards…" allow-clear size="small" class="board-search" data-cy="search"><template #prefix><SearchOutlined class="in-icon" /></template></a-input>
         <a-tag class="pill" :color="loading ? 'processing' : 'success'"><AppstoreOutlined />{{ loading ? 'loading' : `${tasks.length} tasks` }}</a-tag>
         <a-button size="small" @click="load" :loading="loading"><template #icon><ReloadOutlined /></template></a-button>
       </div>
@@ -31,7 +32,7 @@
           <h3 class="column__title">{{ STATUS_LABEL[s] }}</h3>
           <span class="sec__count">{{ byStatus[s].length }}</span>
         </div>
-        <div v-if="!loading && !byStatus[s].length" class="empty column__empty"><InboxOutlined class="empty__icon" /><span>Nothing {{ STATUS_LABEL[s].toLowerCase() }}</span><span class="empty__hint">Drop a card here.</span></div>
+        <div v-if="!loading && !byStatus[s].length" class="empty column__empty"><InboxOutlined class="empty__icon" /><span>{{ appliedSearch ? 'No match' : `Nothing ${STATUS_LABEL[s].toLowerCase()}` }}</span><span class="empty__hint">{{ appliedSearch ? `for “${appliedSearch}”` : 'Drop a card here.' }}</span></div>
         <article v-for="t in byStatus[s]" :key="t.id" class="card" :data-status="t.status" draggable="true" :class="{ 'card--dragging': dragging === t.id }" @dragstart="onDragStart(t)" @dragend="dragging = ''; dragOver = ''">
           <h3 class="card__title" :class="{ 'card__title--done': t.status === 'Done' }" :title="t.title">{{ t.title }}</h3>
           <p class="card__desc" :class="{ 'card__desc--none': !t.description }">{{ t.description || 'No details' }}</p>
@@ -53,19 +54,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
-import { ArrowRightOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined, PlusOutlined, AlignLeftOutlined, InboxOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HistoryOutlined } from '@ant-design/icons-vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ArrowRightOutlined, ArrowLeftOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined, PlusOutlined, AlignLeftOutlined, InboxOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HistoryOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { Modal, Input } from 'ant-design-vue'
 import { h } from 'vue'
-import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, STATUS_COLOR, NEXT_STATUS } from '../../taskpulse.js'
+import { tasksApi, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS } from '../../taskpulse.js'
 
 const api = tasksApi.urls.api
 const tasks = ref([])
 const loading = ref(false)
 const creating = ref(false)
 const error = ref('')
-const filter = ref('all')
-const segments = [{ label: 'All', value: 'all' }, ...STATUSES.map((s) => ({ label: STATUS_LABEL[s], value: s }))]
+const search = ref('')
+const appliedSearch = ref('')
+let searchTimer = null
+watch(search, () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => { appliedSearch.value = search.value.trim(); load() }, 350) })
 const draft = reactive({ title: '', description: '' })
 
 const PREV_STATUS = { InProgress: 'Todo', Done: 'InProgress' }
@@ -78,14 +81,13 @@ const onDrop = async (status) => {
   dragging.value = ''; dragOver.value = ''
   if (t && t.status !== status) await setStatus(t, status)
 }
-const shown = computed(() => (filter.value === 'all' ? tasks.value : tasks.value.filter((t) => t.status === filter.value)))
 
 const fail = (e) => { error.value = e?.message || String(e) }
 
 const load = async () => {
   loading.value = true
   try {
-    const res = await tasksApi.list({ pageSize: 100 })
+    const res = await tasksApi.list({ pageSize: 100, q: appliedSearch.value })
     tasks.value = [...res.items].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
   } catch (e) { fail(e) } finally { loading.value = false }
 }
@@ -94,13 +96,9 @@ const create = async () => {
   creating.value = true
   try { await tasksApi.create({ title: draft.title, description: draft.description || null }); draft.title = ''; draft.description = ''; await load() } catch (e) { fail(e) } finally { creating.value = false }
 }
-const statusOptions = STATUSES.map((s) => ({ label: STATUS_LABEL[s], value: s }))
 const setStatus = async (t, status) => {
   if (status === t.status) return
   try { await tasksApi.update(t.id, { title: t.title, description: t.description, status }); await load() } catch (e) { fail(e) }
-}
-const advance = async (t) => {
-  try { await tasksApi.update(t.id, { title: t.title, description: t.description, status: NEXT_STATUS[t.status] }); await load() } catch (e) { fail(e) }
 }
 const remove = async (t) => {
   try { await tasksApi.remove(t.id); await load() } catch (e) { fail(e) }
@@ -125,6 +123,7 @@ onMounted(load)
 .new-task { display: grid; grid-template-columns: 1.2fr 1.6fr auto; gap: 0.5rem; }
 @media (max-width: 720px) { .new-task { grid-template-columns: 1fr; } }
 .in-icon { color: var(--p-muted); }
+.board-search { width: 14rem; }
 .cards { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); margin-top: 1rem; }
 .card { display: flex; flex-direction: column; gap: 0.5rem; padding: 0.9rem 1rem 0.6rem; border-radius: 14px; background: var(--p-card); border: 1px solid var(--p-border); border-top: 4px solid #94a3b8; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); transition: transform 0.2s, box-shadow 0.2s; }
 .card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); }

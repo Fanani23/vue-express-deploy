@@ -3,10 +3,10 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">Analytics</h1>
-        <p class="page__subtitle">Computed live from every task in TaskPulse — nothing here is hard-coded.</p>
+        <p class="page__subtitle">One request to <code>/api/tasks/stats</code> — the grouping happens in PostgreSQL, so this page costs the same with 40 tasks or 40,000.</p>
       </div>
       <div class="dash__pills">
-        <a-tag class="pill" :color="loading ? 'processing' : error ? 'error' : 'success'"><DatabaseOutlined />{{ loading ? 'loading' : error ? 'error' : `${tasks.length} tasks` }}</a-tag>
+        <a-tag class="pill" :color="loading ? 'processing' : error ? 'error' : 'success'"><DatabaseOutlined />{{ loading ? 'loading' : error ? 'error' : `${total} tasks` }}</a-tag>
         <a-button size="small" @click="load" :loading="loading"><template #icon><ReloadOutlined /></template>refresh</a-button>
       </div>
     </header>
@@ -17,7 +17,7 @@
           <div class="sec">
             <span class="sec__icon"><PieChartOutlined /></span>
             <h3 class="sec__title">By status</h3>
-            <span class="sec__count">{{ tasks.length }}</span>
+            <span class="sec__count">{{ total }}</span>
           </div>
           <div class="chart chart--ring"><canvas ref="statusCanvas"></canvas></div>
           <ul class="legend">
@@ -35,7 +35,7 @@
           <div class="sec">
             <span class="sec__icon"><BarChartOutlined /></span>
             <h3 class="sec__title">Created and completed per day</h3>
-            <span class="sec__count">last 14 days</span>
+            <a-segmented v-model:value="days" :options="[{ label: '7 days', value: 7 }, { label: '14 days', value: 14 }, { label: '30 days', value: 30 }]" size="small" />
           </div>
           <div class="chart chart--bars"><canvas ref="dailyCanvas"></canvas></div>
         </div>
@@ -90,7 +90,9 @@ import { DatabaseOutlined, ReloadOutlined, PieChartOutlined, BarChartOutlined, H
 import { useTheme } from '../theme.js'
 
 const { isDark } = useTheme()
-const tasks = ref([])
+const stats = ref(null)
+const open = ref([])
+const days = ref(14)
 const loading = ref(false)
 const error = ref('')
 const statusCanvas = ref(null)
@@ -106,13 +108,13 @@ const load = async () => {
   loading.value = true
   error.value = ''
   try {
-    const all = []
-    for (let page = 1; page <= 20; page++) {
-      const res = await tasksApi.list({ page, pageSize: 100 })
-      all.push(...res.items)
-      if (all.length >= res.total || res.items.length === 0) break
-    }
-    tasks.value = all
+    const [s, todo, inProgress] = await Promise.all([
+      tasksApi.stats(days.value),
+      tasksApi.list({ status: 'Todo', pageSize: 6 }),
+      tasksApi.list({ status: 'InProgress', pageSize: 6 }),
+    ])
+    stats.value = s
+    open.value = [...todo.items, ...inProgress.items].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).slice(0, 6)
   } catch (e) {
     error.value = e?.message || String(e)
   } finally {
@@ -120,29 +122,16 @@ const load = async () => {
   }
 }
 
-const counts = computed(() => Object.fromEntries(STATUSES.map((s) => [s, tasks.value.filter((t) => t.status === s).length])))
-const pct = (s) => (tasks.value.length ? Math.round((counts.value[s] / tasks.value.length) * 100) + '%' : '0%')
+const total = computed(() => stats.value?.total || 0)
+const counts = computed(() => Object.fromEntries(STATUSES.map((s) => [s, stats.value?.byStatus?.[s] || 0])))
+const pct = (s) => (total.value ? Math.round((counts.value[s] / total.value) * 100) + '%' : '0%')
 
-const days = computed(() => {
-  const out = []
-  const d = new Date(); d.setHours(0, 0, 0, 0)
-  for (let i = 13; i >= 0; i--) {
-    const day = new Date(d); day.setDate(d.getDate() - i)
-    out.push(day)
-  }
-  return out
-})
-const dayKey = (x) => new Date(x).toDateString()
 const daily = computed(() => {
-  const created = {}, done = {}
-  for (const t of tasks.value) {
-    created[dayKey(t.createdAt)] = (created[dayKey(t.createdAt)] || 0) + 1
-    if (t.status === 'Done') done[dayKey(t.updatedAt)] = (done[dayKey(t.updatedAt)] || 0) + 1
-  }
+  const rows = stats.value?.daily || []
   return {
-    labels: days.value.map((d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' })),
-    created: days.value.map((d) => created[d.toDateString()] || 0),
-    done: days.value.map((d) => done[d.toDateString()] || 0),
+    labels: rows.map((r) => new Date(r.date + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })),
+    created: rows.map((r) => r.created),
+    done: rows.map((r) => r.done),
   }
 })
 
@@ -150,8 +139,8 @@ const age = (iso) => {
   const h = Math.round((Date.now() - new Date(iso).getTime()) / 36e5)
   return h < 24 ? `${h} h` : `${Math.round(h / 24)} d`
 }
-const oldestOpen = computed(() => tasks.value.filter((t) => t.status !== 'Done').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)).slice(0, 6))
-const recent = computed(() => [...tasks.value].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)).slice(0, 6))
+const oldestOpen = computed(() => open.value)
+const recent = computed(() => stats.value?.recentlyUpdated || [])
 const openColumns = [
   { title: 'Task', dataIndex: 'title', key: 'title', ellipsis: true },
   { title: 'Status', key: 'status', width: 120 },
@@ -194,7 +183,8 @@ const draw = () => {
   })
 }
 
-watch([tasks, isDark], () => nextTick(draw))
+watch([stats, isDark], () => nextTick(draw))
+watch(days, load)
 onMounted(load)
 onBeforeUnmount(() => { statusChart?.destroy(); dailyChart?.destroy() })
 </script>

@@ -158,7 +158,7 @@ import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined,
 import { useMainStore } from '../store.js'
 import { tasksApi, catalogApi, timeAgo, STATUS_LABEL } from '../taskpulse.js'
 
-const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/leaflet', members: '/dashboard', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
+const KIND_PAGE = { regions: '/template-demos/cascade', countries: '/template-demos/cascade', states: '/template-demos/cascade2', force: '/template-demos/cascade2', places: '/template-demos/map', members: '/dashboard', links: '/dashboard', types: '/template-demos/form', tags: '/template-demos/form', sites: '/template-demos/form' }
 
 const store = useMainStore()
 const identity = computed(() => store.user?.nickname || store.user?.user_meta?.email || store.user?.username || 'there')
