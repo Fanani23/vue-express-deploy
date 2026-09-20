@@ -66,6 +66,13 @@ export const catalogApi = {
   create: (kind, item) => request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify(item) }),
   update: (kind, code, item) => request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) }),
   remove: (kind, code) => request(`/api/catalog/${kind}/${code}`, { method: 'DELETE' }),
+  upsert: async (kind, code, item) => {
+    const res = await fetch(`${API}/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item), headers: { Accept: 'application/json', 'Content-Type': 'application/json' } })
+    if (res.status === 404) return request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify({ code, ...item }) })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(body?.detail || body?.title || `${res.status} ${res.statusText}`)
+    return body
+  },
 }
 
 export const preferencesApi = {
@@ -94,6 +101,8 @@ export const uploadsApi = {
   remove: (id) => request(`/api/uploads/${id}`, { method: 'DELETE' }),
   contentUrl: (id) => `${API}/api/uploads/${id}/content`,
 }
+
+export const userKey = (user) => 'user-' + String(user?.sub ?? user?.id ?? 'anon').replace(/[^A-Za-z0-9._@+-]/g, '-').toLowerCase()
 
 export const formatBytes = (n) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`)
 

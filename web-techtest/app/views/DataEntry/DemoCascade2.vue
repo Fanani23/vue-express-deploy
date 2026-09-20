@@ -3,13 +3,16 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">Cascading selects, three levels</h1>
-        <p class="page__subtitle">Continents → countries (split by hemisphere) → states, plus a pair of include/exclude lists that can never overlap. One generic <code>narrow()</code> keeps every level consistent.</p>
+        <p class="page__subtitle">Continents → countries (split by hemisphere) → states, plus a pair of include/exclude lists that can never overlap. Every level is a catalog kind in TaskPulse — the same <code>regions</code> and <code>countries</code> the Cascade page edits, plus <code>states</code> and <code>force</code> which you can edit here.</p>
       </div>
       <div class="page__actions">
-        <a-button @click="clear" :disabled="!touched"><template #icon><ClearOutlined /></template>Clear</a-button>
-        <a-button type="primary" @click="run" :disabled="!touched"><template #icon><PlayCircleOutlined /></template>Run</a-button>
+        <a-tag class="pill" :color="error ? 'error' : 'blue'"><DatabaseOutlined />{{ error ? 'API error' : `${lists.continents.length} · ${countries.length} · ${states.length} · ${force.length}` }}</a-tag>
+        <a-button @click="clear" :disabled="!touched && !saved"><template #icon><ClearOutlined /></template>Clear</a-button>
+        <a-button type="primary" @click="run" :disabled="!touched" :loading="saving"><template #icon><PlayCircleOutlined /></template>Run</a-button>
       </div>
     </header>
+
+    <transition name="pop"><a-alert v-if="error" type="error" show-icon closable :message="error" class="alert" @close="error = ''" /></transition>
 
     <div class="c2-grid">
       <div class="page__card">
@@ -17,13 +20,15 @@
           <span class="sec__icon"><GlobalOutlined /></span>
           <h3 class="sec__title">1 · Continents</h3>
           <span class="sec__count">{{ form.continents.length }} / {{ lists.continents.length }}</span>
-          <a-button size="small" type="text" @click="toggleAll">{{ allContinents ? 'none' : 'all' }}</a-button>
+          <a-button size="small" type="text" :disabled="!lists.continents.length" @click="toggleAll">{{ allContinents ? 'none' : 'all' }}</a-button>
         </div>
-        <div class="chips">
-          <a-checkable-tag v-for="c in lists.continents" :key="c" :checked="form.continents.includes(c)" class="chip" @change="(on) => pick('continents', c, on, cascade)">
-            <EnvironmentOutlined /> {{ c }} <span class="chip__n">{{ (EAST[c] || WEST[c] || []).length }}</span>
+        <div v-if="!lists.continents.length && !loading" class="empty"><GlobalOutlined class="empty__icon" /><span>No continents</span><span class="empty__hint">Add regions on the <router-link to="/template-demos/cascade">Cascade</router-link> page.</span></div>
+        <div v-else class="chips">
+          <a-checkable-tag v-for="c in lists.continents" :key="c.code" :checked="form.continents.includes(c.code)" class="chip" @change="(on) => pick('continents', c.code, on, cascade)">
+            <EnvironmentOutlined /> {{ c.label }} <span class="chip__n">{{ countriesOf(c.code).length }}</span><span class="chip__side">{{ c.attributes?.side === 'west' ? 'W' : 'E' }}</span>
           </a-checkable-tag>
         </div>
+        <p class="page__note">The hemisphere comes from each region's <code>attributes.side</code>. Regions and countries are edited on the <router-link to="/template-demos/cascade">Cascade</router-link> page.</p>
       </div>
 
       <div class="page__card">
@@ -36,11 +41,11 @@
         <template v-else>
           <div class="group" v-if="lists.countriesEast.length">
             <div class="group__label"><CompassOutlined /> East hemisphere <span class="page__muted">{{ form.countriesEast.length }} / {{ lists.countriesEast.length }}</span></div>
-            <div class="chips"><a-checkable-tag v-for="c in lists.countriesEast" :key="c" :checked="form.countriesEast.includes(c)" class="chip" @change="(on) => pick('countriesEast', c, on)">{{ c }}</a-checkable-tag></div>
+            <div class="chips"><a-checkable-tag v-for="c in lists.countriesEast" :key="c.code" :checked="form.countriesEast.includes(c.code)" class="chip" @change="(on) => pick('countriesEast', c.code, on)">{{ c.label }}</a-checkable-tag></div>
           </div>
           <div class="group" v-if="lists.countriesWest.length">
             <div class="group__label"><CompassOutlined /> West hemisphere <span class="page__muted">{{ form.countriesWest.length }} / {{ lists.countriesWest.length }}</span></div>
-            <div class="chips"><a-checkable-tag v-for="c in lists.countriesWest" :key="c" :checked="form.countriesWest.includes(c)" class="chip" @change="(on) => pick('countriesWest', c, on, cascadeStates)">{{ c }} <span class="chip__n">{{ (STATES[c] || []).length }}</span></a-checkable-tag></div>
+            <div class="chips"><a-checkable-tag v-for="c in lists.countriesWest" :key="c.code" :checked="form.countriesWest.includes(c.code)" class="chip" @change="(on) => pick('countriesWest', c.code, on, cascadeStates)">{{ c.label }} <span class="chip__n">{{ statesOf(c.code).length }}</span></a-checkable-tag></div>
           </div>
         </template>
       </div>
@@ -52,7 +57,17 @@
           <span class="sec__count">{{ form.states.length }} / {{ lists.states.length }}</span>
         </div>
         <div v-if="!lists.states.length" class="empty"><PushpinOutlined class="empty__icon" /><span>No states yet</span><span class="empty__hint">Pick a country in the west hemisphere.</span></div>
-        <div v-else class="chips"><a-checkable-tag v-for="s in lists.states" :key="s" :checked="form.states.includes(s)" class="chip" @change="(on) => pick('states', s, on)">{{ s }}</a-checkable-tag></div>
+        <div v-else class="chips">
+          <span v-for="s in lists.states" :key="s.code" class="chipwrap">
+            <a-checkable-tag :checked="form.states.includes(s.code)" class="chip" @change="(on) => pick('states', s.code, on)">{{ s.label }}</a-checkable-tag>
+            <a-popconfirm :title="`Delete state ${s.label}?`" ok-text="Delete" ok-type="danger" @confirm="removeItem('states', s)"><button type="button" class="chip__x" :aria-label="'delete ' + s.label"><CloseOutlined /></button></a-popconfirm>
+          </span>
+        </div>
+        <form class="add add--state" @submit.prevent="addState">
+          <a-input v-model:value="newState.label" placeholder="New state" :maxlength="120" size="small" data-cy="new-state" />
+          <a-select v-model:value="newState.parent" placeholder="in country" size="small" :options="westCountries.map((c) => ({ value: c.code, label: c.label }))" data-cy="new-state-country" />
+          <a-button size="small" html-type="submit" :disabled="!newState.label.trim() || !newState.parent" :loading="busy.state"><template #icon><PlusOutlined /></template>Add</a-button>
+        </form>
       </div>
 
       <div class="page__card">
@@ -62,14 +77,24 @@
           <span class="sec__count">{{ form.includes.length }} in · {{ form.excludes.length }} out</span>
         </div>
         <div class="group">
-          <div class="group__label"><PlusCircleOutlined /> Include <a-button size="small" type="text" @click="fill('includes')">{{ form.includes.length === FORCE.length - form.excludes.length ? 'none' : 'all' }}</a-button></div>
-          <div class="chips"><a-checkable-tag v-for="f in FORCE" :key="f" :checked="form.includes.includes(f)" class="chip chip--in" :class="{ 'chip--blocked': form.excludes.includes(f) }" @change="(on) => !form.excludes.includes(f) && pick('includes', f, on)">{{ f }}</a-checkable-tag></div>
+          <div class="group__label"><PlusCircleOutlined /> Include <a-button size="small" type="text" :disabled="!force.length" @click="fill('includes')">{{ force.length && form.includes.length === force.length - form.excludes.length ? 'none' : 'all' }}</a-button></div>
+          <div v-if="!force.length" class="empty"><SwapOutlined class="empty__icon" /><span>No values</span></div>
+          <div v-else class="chips"><a-checkable-tag v-for="f in force" :key="f.code" :checked="form.includes.includes(f.code)" class="chip chip--in" :class="{ 'chip--blocked': form.excludes.includes(f.code) }" @change="(on) => !form.excludes.includes(f.code) && pick('includes', f.code, on)">{{ f.label }}</a-checkable-tag></div>
         </div>
         <div class="group">
-          <div class="group__label"><MinusCircleOutlined /> Exclude <a-button size="small" type="text" @click="fill('excludes')">{{ form.excludes.length === FORCE.length - form.includes.length ? 'none' : 'all' }}</a-button></div>
-          <div class="chips"><a-checkable-tag v-for="f in FORCE" :key="f" :checked="form.excludes.includes(f)" class="chip chip--out" :class="{ 'chip--blocked': form.includes.includes(f) }" @change="(on) => !form.includes.includes(f) && pick('excludes', f, on)">{{ f }}</a-checkable-tag></div>
+          <div class="group__label"><MinusCircleOutlined /> Exclude <a-button size="small" type="text" :disabled="!force.length" @click="fill('excludes')">{{ force.length && form.excludes.length === force.length - form.includes.length ? 'none' : 'all' }}</a-button></div>
+          <div v-if="force.length" class="chips">
+            <span v-for="f in force" :key="f.code" class="chipwrap">
+              <a-checkable-tag :checked="form.excludes.includes(f.code)" class="chip chip--out" :class="{ 'chip--blocked': form.includes.includes(f.code) }" @change="(on) => !form.includes.includes(f.code) && pick('excludes', f.code, on)">{{ f.label }}</a-checkable-tag>
+              <a-popconfirm :title="`Delete ${f.label} from the force list?`" ok-text="Delete" ok-type="danger" @confirm="removeItem('force', f)"><button type="button" class="chip__x" :aria-label="'delete ' + f.label"><CloseOutlined /></button></a-popconfirm>
+            </span>
+          </div>
         </div>
-        <p class="page__note">A value chosen on one side is greyed out on the other — the lists can never overlap.</p>
+        <form class="add" @submit.prevent="addForce">
+          <a-input v-model:value="newForce" placeholder="New value, e.g. cc1" :maxlength="120" size="small" data-cy="new-force" />
+          <a-button size="small" html-type="submit" :disabled="!newForce.trim()" :loading="busy.force"><template #icon><PlusOutlined /></template>Add</a-button>
+        </form>
+        <p class="page__note">A value chosen on one side is greyed out on the other — the lists can never overlap. Hover a value in the exclude row to delete it.</p>
       </div>
 
       <div class="page__card c2-wide">
@@ -77,32 +102,33 @@
           <span class="sec__icon"><ApartmentOutlined /></span>
           <h3 class="sec__title">Selection</h3>
           <a-segmented v-model:value="view" :options="['Tree', 'JSON']" size="small" />
-          <span class="sec__count" style="margin-left: auto">{{ submittedAt ? 'last run ' + submittedAt : 'not run yet' }}</span>
+          <span class="sec__count" style="margin-left: auto">{{ saved ? 'last run ' + timeAgo(saved.updatedAt) : 'not run yet' }}</span>
+          <a-button v-if="saved" size="small" type="text" @click="restore">restore last run</a-button>
         </div>
         <div v-if="!touched" class="empty"><ApartmentOutlined class="empty__icon" /><span>Nothing selected</span></div>
         <div v-else-if="view === 'Tree'" class="tree-grid">
           <div class="tree__col">
             <div v-for="c in form.continents" :key="c" class="tree__region">
-              <span class="tree__label"><EnvironmentOutlined /> {{ c }}</span>
+              <span class="tree__label"><EnvironmentOutlined /> {{ labelOf(lists.continents, c) }}</span>
               <div class="tree__countries">
-                <template v-for="k in (EAST[c] || WEST[c] || []).filter((x) => form.countriesEast.includes(x) || form.countriesWest.includes(x))" :key="k">
-                  <a-tag color="blue">{{ k }}</a-tag>
-                  <a-tag v-for="s in (STATES[k] || []).filter((x) => form.states.includes(x))" :key="s" color="green">{{ s }}</a-tag>
+                <template v-for="k in countriesOf(c).filter((x) => form.countriesEast.includes(x.code) || form.countriesWest.includes(x.code))" :key="k.code">
+                  <a-tag color="blue">{{ k.label }}</a-tag>
+                  <a-tag v-for="s in statesOf(k.code).filter((x) => form.states.includes(x.code))" :key="s.code" color="green">{{ s.label }}</a-tag>
                 </template>
-                <span v-if="!(EAST[c] || WEST[c] || []).some((x) => form.countriesEast.includes(x) || form.countriesWest.includes(x))" class="page__muted">no country chosen</span>
+                <span v-if="!countriesOf(c).some((x) => form.countriesEast.includes(x.code) || form.countriesWest.includes(x.code))" class="page__muted">no country chosen</span>
               </div>
             </div>
             <div v-if="!form.continents.length" class="page__muted">no continent chosen</div>
           </div>
           <div class="tree__col">
-            <div class="tree__region"><span class="tree__label"><PlusCircleOutlined /> Include</span><div class="tree__countries"><a-tag v-for="f in form.includes" :key="f" color="green">{{ f }}</a-tag><span v-if="!form.includes.length" class="page__muted">none</span></div></div>
-            <div class="tree__region"><span class="tree__label"><MinusCircleOutlined /> Exclude</span><div class="tree__countries"><a-tag v-for="f in form.excludes" :key="f" color="red">{{ f }}</a-tag><span v-if="!form.excludes.length" class="page__muted">none</span></div></div>
+            <div class="tree__region"><span class="tree__label"><PlusCircleOutlined /> Include</span><div class="tree__countries"><a-tag v-for="f in form.includes" :key="f" color="green">{{ labelOf(force, f) }}</a-tag><span v-if="!form.includes.length" class="page__muted">none</span></div></div>
+            <div class="tree__region"><span class="tree__label"><MinusCircleOutlined /> Exclude</span><div class="tree__countries"><a-tag v-for="f in form.excludes" :key="f" color="red">{{ labelOf(force, f) }}</a-tag><span v-if="!form.excludes.length" class="page__muted">none</span></div></div>
           </div>
         </div>
         <pre v-else class="code">{{ JSON.stringify(form, null, 2) }}</pre>
-        <template v-if="submitted">
-          <div class="sec" style="margin-top: 1rem"><span class="sec__icon"><CheckCircleOutlined /></span><h3 class="sec__title">Last run</h3></div>
-          <pre class="code">{{ submitted }}</pre>
+        <template v-if="saved">
+          <div class="sec" style="margin-top: 1rem"><span class="sec__icon"><CheckCircleOutlined /></span><h3 class="sec__title">Last run</h3><span class="sec__count">catalog/selections-2/{{ key }}</span></div>
+          <pre class="code">{{ JSON.stringify(saved.attributes, null, 2) }}</pre>
         </template>
       </div>
     </div>
@@ -110,32 +136,62 @@
 </template>
 
 <script setup>
-import { reactive, ref, computed } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
-import { ClearOutlined, PlayCircleOutlined, GlobalOutlined, EnvironmentOutlined, FlagOutlined, CompassOutlined, PushpinOutlined, SwapOutlined, PlusCircleOutlined, MinusCircleOutlined, ApartmentOutlined, CheckCircleOutlined } from '@ant-design/icons-vue'
+import { DatabaseOutlined, ClearOutlined, PlayCircleOutlined, GlobalOutlined, EnvironmentOutlined, FlagOutlined, CompassOutlined, PushpinOutlined, SwapOutlined, PlusCircleOutlined, MinusCircleOutlined, ApartmentOutlined, CheckCircleOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons-vue'
+import { useMainStore } from '../../store.js'
+import { catalogApi, timeAgo, userKey } from '../../taskpulse.js'
 
-const EAST = { Asia: ['Russia', 'Japan', 'Burma', 'Indonesia', 'Afghanistan'], Europe: ['Russia', 'Germany', 'France', 'Poland', 'Sweden', 'Italy'], Africa: ['Egypt', 'Nigeria', 'Kenya', 'Liberia'], ME: ['Egypt', 'Saudi Arabia', 'Afghanistan'] }
-const WEST = { NA: ['United States', 'Canada'], SA: ['Brazil', 'Argentina', 'Ecuador'] }
-const STATES = { 'United States': ['California', 'New York', 'Ohio', 'Utah', 'Texas'], Canada: ['Ontario', 'Quebec', 'BC', 'Alberta'], Brazil: ['B1', 'B2'], Argentina: ['A1', 'A2', 'A3'], Ecuador: ['EC1', 'EC2'] }
-const FORCE = ['aa1', 'aa22', 'aa23', 'aa4', 'aa5', 'bb1', 'bb22', 'bb23', 'bb4', 'bb5']
+const store = useMainStore()
+const key = computed(() => userKey(store.user))
 
-const lists = reactive({ continents: ['Asia', 'Europe', 'NA', 'SA', 'Africa', 'ME'], countriesEast: [], countriesWest: [], states: [] })
+const regions = ref([])
+const countries = ref([])
+const states = ref([])
+const force = ref([])
+const loading = ref(false)
+const saving = ref(false)
+const saved = ref(null)
+const error = ref('')
+const busy = reactive({ state: false, force: false })
+const newState = reactive({ label: '', parent: undefined })
+const newForce = ref('')
+
+const lists = reactive({ continents: [], countriesEast: [], countriesWest: [], states: [] })
 const form = reactive({ continents: [], countriesEast: [], countriesWest: [], states: [], includes: [], excludes: [] })
-const submitted = ref('')
-const submittedAt = ref('')
 const view = ref('Tree')
 
 const touched = computed(() => Object.values(form).some((v) => v.length))
-const allContinents = computed(() => form.continents.length === lists.continents.length)
+const allContinents = computed(() => lists.continents.length > 0 && form.continents.length === lists.continents.length)
+const labelOf = (list, code) => list.find((x) => x.code === code)?.label || code
+const isWest = (regionCode) => regions.value.find((r) => r.code === regionCode)?.attributes?.side === 'west'
+const countriesOf = (regionCode) => countries.value.filter((c) => c.parents.includes(regionCode))
+const statesOf = (countryCode) => states.value.filter((s) => s.parents.includes(countryCode))
+const westCountries = computed(() => { const seen = new Set(); return regions.value.filter((r) => isWest(r.code)).flatMap((r) => countriesOf(r.code)).filter((c) => !seen.has(c.code) && seen.add(c.code)) })
 
-const narrow = (selectedParents, masterMap, listKey, formKey) => {
-  lists[listKey] = [...new Set(selectedParents.flatMap((p) => masterMap[p] || []))]
-  form[formKey] = form[formKey].filter((x) => lists[listKey].includes(x))
+const fail = (e) => { error.value = e?.message || String(e) }
+const load = async () => {
+  loading.value = true
+  try {
+    const [r, c, s, f] = await Promise.all([catalogApi.list('regions'), catalogApi.list('countries'), catalogApi.list('states'), catalogApi.list('force')])
+    regions.value = r; countries.value = c; states.value = s; force.value = f
+    lists.continents = r
+    cascade()
+    form.includes = form.includes.filter((x) => f.some((y) => y.code === x))
+    form.excludes = form.excludes.filter((x) => f.some((y) => y.code === x))
+  } catch (e) { fail(e) } finally { loading.value = false }
 }
-const cascadeStates = () => narrow(form.countriesWest, STATES, 'states', 'states')
+const loadSaved = async () => { try { saved.value = await catalogApi.get('selections-2', key.value) } catch { saved.value = null } }
+
+const dedupe = (items) => { const seen = new Set(); return items.filter((c) => !seen.has(c.code) && seen.add(c.code)) }
+const narrow = (listKey, formKey, items) => {
+  lists[listKey] = items
+  form[formKey] = form[formKey].filter((x) => items.some((i) => i.code === x))
+}
+const cascadeStates = () => narrow('states', 'states', dedupe(form.countriesWest.flatMap(statesOf)))
 const cascade = () => {
-  narrow(form.continents, EAST, 'countriesEast', 'countriesEast')
-  narrow(form.continents, WEST, 'countriesWest', 'countriesWest')
+  narrow('countriesEast', 'countriesEast', dedupe(form.continents.filter((c) => !isWest(c)).flatMap(countriesOf)))
+  narrow('countriesWest', 'countriesWest', dedupe(form.continents.filter(isWest).flatMap(countriesOf)))
   cascadeStates()
 }
 
@@ -143,21 +199,55 @@ const pick = (key, value, on, after) => {
   form[key] = on ? [...form[key], value] : form[key].filter((x) => x !== value)
   after?.()
 }
-const toggleAll = () => { form.continents = allContinents.value ? [] : [...lists.continents]; cascade() }
+const toggleAll = () => { form.continents = allContinents.value ? [] : lists.continents.map((c) => c.code); cascade() }
 const fill = (key) => {
   const other = key === 'includes' ? 'excludes' : 'includes'
-  const free = FORCE.filter((x) => !form[other].includes(x))
+  const free = force.value.map((f) => f.code).filter((x) => !form[other].includes(x))
   form[key] = form[key].length === free.length ? [] : free
 }
-const run = () => { submitted.value = JSON.stringify(form, null, 2); submittedAt.value = new Date().toLocaleTimeString(); message.success('Run recorded — see Last run') }
-const clear = () => { Object.assign(form, { continents: [], countriesEast: [], countriesWest: [], states: [], includes: [], excludes: [] }); cascade(); submitted.value = ''; submittedAt.value = '' }
+
+const addState = async () => {
+  if (!newState.label.trim() || !newState.parent) return
+  busy.state = true
+  try { await catalogApi.create('states', { label: newState.label.trim(), parents: [newState.parent] }); newState.label = ''; newState.parent = undefined; await load() } catch (e) { fail(e) } finally { busy.state = false }
+}
+const addForce = async () => {
+  if (!newForce.value.trim()) return
+  busy.force = true
+  try { await catalogApi.create('force', { label: newForce.value.trim(), sort: force.value.length + 1 }); newForce.value = ''; await load() } catch (e) { fail(e) } finally { busy.force = false }
+}
+const removeItem = async (kind, item) => { try { await catalogApi.remove(kind, item.code); await load() } catch (e) { fail(e) } }
+
+const run = async () => {
+  saving.value = true
+  try {
+    saved.value = await catalogApi.upsert('selections-2', key.value, { label: `Cascade 2 run of ${key.value}`, attributes: JSON.parse(JSON.stringify(form)) })
+    message.success('Run recorded — see Last run')
+  } catch (e) { fail(e) } finally { saving.value = false }
+}
+const restore = () => {
+  const a = saved.value?.attributes || {}
+  form.continents = [...(a.continents || [])]; cascade()
+  form.countriesEast = (a.countriesEast || []).filter((x) => lists.countriesEast.some((i) => i.code === x))
+  form.countriesWest = (a.countriesWest || []).filter((x) => lists.countriesWest.some((i) => i.code === x)); cascadeStates()
+  form.states = (a.states || []).filter((x) => lists.states.some((i) => i.code === x))
+  form.includes = [...(a.includes || [])]; form.excludes = [...(a.excludes || [])]
+}
+const clear = async () => {
+  Object.assign(form, { continents: [], countriesEast: [], countriesWest: [], states: [], includes: [], excludes: [] }); cascade()
+  if (saved.value) { try { await catalogApi.remove('selections-2', key.value); saved.value = null } catch (e) { fail(e) } }
+}
+
+onMounted(() => Promise.all([load(), loadSaved()]))
 </script>
 
 <style scoped>
+.alert { margin-bottom: 1rem; }
 .c2-grid { display: grid; gap: 1rem; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
 @media (max-width: 1100px) { .c2-grid { grid-template-columns: 1fr; } }
 .c2-wide { grid-column: 1 / -1; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.chipwrap { position: relative; display: inline-flex; }
 .chip { margin: 0; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid var(--p-border); background: var(--p-bg); font-size: 0.85rem; line-height: 1.3; cursor: pointer; display: inline-flex; align-items: center; gap: 0.3rem; user-select: none; }
 .chip:hover { border-color: var(--p-accent); color: var(--p-accent); }
 .chip.ant-tag-checkable-checked { background: var(--p-accent); border-color: var(--p-accent); color: #fff; }
@@ -166,7 +256,13 @@ const clear = () => { Object.assign(form, { continents: [], countriesEast: [], c
 .chip--blocked { opacity: 0.35; cursor: not-allowed; text-decoration: line-through; }
 .chip--blocked:hover { border-color: var(--p-border); color: inherit; }
 .chip__n { font-size: 0.7rem; opacity: 0.7; padding: 0 0.35rem; border-radius: 999px; background: rgba(0, 0, 0, 0.08); }
+.chip__side { font-size: 0.65rem; font-weight: 700; opacity: 0.6; }
 .chip.ant-tag-checkable-checked .chip__n { background: rgba(255, 255, 255, 0.25); }
+.chip__x { position: absolute; top: -0.35rem; right: -0.35rem; width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 1px solid var(--p-border); background: var(--p-card); color: var(--p-muted); font-size: 0.55rem; display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity 0.15s; padding: 0; }
+.chipwrap:hover .chip__x, .chip__x:focus-visible { opacity: 1; }
+.chip__x:hover { color: #ef4444; border-color: #ef4444; }
+.add { display: grid; grid-template-columns: 1fr auto; gap: 0.4rem; margin-top: 0.75rem; }
+.add--state { grid-template-columns: 1fr 1fr auto; }
 .group + .group { margin-top: 0.9rem; }
 .group__label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.45rem; }
 .tree-grid { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
