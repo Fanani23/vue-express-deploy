@@ -273,3 +273,20 @@ describe('history', () => {
     ])
   })
 })
+
+describe('idempotent creates', () => {
+  it('sends an Idempotency-Key and retries a dropped connection once with the same key', async () => {
+    fetch.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(jsonResponse(201, { id: 't1' }))
+    await expect(mod.tasksApi.create({ title: 'once' })).resolves.toEqual({ id: 't1' })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    const keys = fetch.mock.calls.map(([, init]) => init.headers['Idempotency-Key'])
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$|^\d+-/)
+    expect(keys[1]).toBe(keys[0])
+  })
+  it('does not retry an HTTP error, and a caller-supplied key is used as given', async () => {
+    fetch.mockResolvedValue(jsonResponse(422, { title: 'used for a different request' }))
+    await expect(mod.catalogApi.create('places', { label: 'x' }, 'my-key')).rejects.toThrow(/different request/)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    expect(fetch.mock.calls[0][1].headers['Idempotency-Key']).toBe('my-key')
+  })
+})

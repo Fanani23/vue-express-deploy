@@ -30,7 +30,13 @@ await t.page.type('.inline-add--col input[placeholder="https://…"]', 'https://
 await t.clickText('.inline-add--col button', 'Add link'); await sleep(1500)
 t.check('link created', (await t.page.$$eval('.link__a', (els) => els.map((e) => e.textContent.trim()))).includes(name))
 
-const delLink = await t.page.evaluateHandle((n) => [...document.querySelectorAll('.link')].find((e) => e.textContent.includes(n))?.querySelector('.ant-btn-dangerous'), name)
-if (delLink.asElement()) { await delLink.asElement().click(); await sleep(400); await t.clickText('.ant-popconfirm button', 'Remove'); await sleep(1200) }
+// the list re-renders on the change event the create emits, so the button is looked up fresh at click time and
+// the confirmation is awaited rather than assumed after a fixed pause
+await sleep(1500)
+const clicked = await t.page.evaluate((n) => { const b = [...document.querySelectorAll('.link')].find((e) => e.textContent.includes(n))?.querySelector('.ant-btn-dangerous'); b?.click(); return !!b }, name)
+if (clicked) {
+  await t.page.waitForFunction(() => [...document.querySelectorAll('.ant-popconfirm:not(.ant-popover-hidden) button')].some((b) => b.textContent.trim() === 'Remove'), { timeout: 5000 })
+  await t.clickText('.ant-popconfirm:not(.ant-popover-hidden) button', 'Remove'); await sleep(1200)
+}
 t.check('link deleted', !(await t.page.$$eval('.link__a', (els) => els.map((e) => e.textContent.trim()))).includes(name))
 await t.done()

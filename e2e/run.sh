@@ -15,7 +15,7 @@ failed=0
 # because it revokes the session on purpose. A run starts from a clean cache.
 rm -rf "${TMPDIR:-/tmp}/vt-e2e"
 # lockout.mjs first: its seven sign-in calls plus the rest of the run stay under the 10/min per-address limit
-for t in "${@:-tests/lockout.mjs tests/pages.mjs tests/dashboard.mjs tests/taskfields.mjs tests/csv.mjs tests/webhooks.mjs tests/history.mjs tests/live.mjs tests/a11y.mjs tests/devices.mjs tests/session.mjs}"; do
+for t in "${@:-tests/lockout.mjs tests/pages.mjs tests/dashboard.mjs tests/taskfields.mjs tests/csv.mjs tests/webhooks.mjs tests/history.mjs tests/idempotency.mjs tests/live.mjs tests/a11y.mjs tests/devices.mjs tests/session.mjs}"; do
   for f in $t; do
     printf '\n\033[1;34m==> %s\033[0m\n' "$f"
     node "$f" || failed=1

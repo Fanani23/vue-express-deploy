@@ -52,6 +52,19 @@ const request = async (path, options = {}) => {
   return body
 }
 
+// A create carries an Idempotency-Key, so a retry after a dropped connection (the request may have reached the
+// server) gets the first result back instead of making a second row. Network errors are retried once with the same key.
+export const newIdempotencyKey = () => (globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
+const createOnce = async (path, body, key = newIdempotencyKey()) => {
+  const options = { method: 'POST', body, headers: { 'Idempotency-Key': key } }
+  try {
+    return await request(path, options)
+  } catch (e) {
+    if (!(e instanceof TypeError)) throw e // an HTTP answer: not a transport failure
+    return request(path, options)
+  }
+}
+
 export const tasksApi = {
   list: ({ status, q: search, page = 1, pageSize = 10, priority, assignee, label, due } = {}) => {
     const q = new URLSearchParams({ page, pageSize })
@@ -73,7 +86,7 @@ export const tasksApi = {
     return { total: all.total, Todo: per[0].total, InProgress: per[1].total, Done: per[2].total }
   },
   stats: (days = 14) => request(`/api/tasks/stats?days=${days}`),
-  create: (task) => request('/api/tasks', { method: 'POST', body: JSON.stringify(task) }),
+  create: (task, key) => createOnce('/api/tasks', JSON.stringify(task), key),
   update: (id, task) => request(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(task) }),
   // change one or more fields of a task the caller already holds
   patch: (task, changes) => request(`/api/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify(taskBody(task, changes)) }),
@@ -114,7 +127,7 @@ export const catalogApi = {
   },
   get: (kind, code) => request(`/api/catalog/${kind}/${code}`),
   find: async (kind, code) => (await request(`/api/catalog/${kind}?q=${encodeURIComponent(code)}`)).find((item) => item.code === code) || null,
-  create: (kind, item) => request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify(item) }),
+  create: (kind, item, key) => createOnce(`/api/catalog/${kind}`, JSON.stringify(item), key),
   update: (kind, code, item) => request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) }),
   remove: (kind, code) => request(`/api/catalog/${kind}/${code}`, { method: 'DELETE' }),
   history: (kind, code) => request(`/api/catalog/${kind}/${code}/history`),
@@ -156,7 +169,7 @@ export const uploadsApi = {
     for (const f of files) form.append('files', f, f.name)
     if (source) form.append('source', source)
     if (note) form.append('note', note)
-    return request('/api/uploads', { method: 'POST', body: form })
+    return createOnce('/api/uploads', form)
   },
   remove: (id) => request(`/api/uploads/${id}`, { method: 'DELETE' }),
   contentUrl: (id) => `${API}/api/uploads/${id}/content`,
