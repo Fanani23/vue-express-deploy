@@ -184,8 +184,16 @@ server {
         proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header   X-Forwarded-Proto \$scheme;
     }
+    # Hashed build output: cache forever, and a chunk that no longer exists is a 404 - never the SPA's HTML
+    # (an HTML body for a <script type=module> is the "expected a JavaScript module" error after a redeploy).
+    location /assets/ {
+        try_files \$uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+    # The HTML must always be revalidated, otherwise a browser keeps referencing chunks from the previous build.
     location / {
         try_files \$uri \$uri/ /index.html;
+        add_header Cache-Control "no-cache";
     }
 }
 EOF
