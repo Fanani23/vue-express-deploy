@@ -23,18 +23,22 @@ const request = async (path, options = {}) => {
 }
 
 export const tasksApi = {
-  list: ({ status, page = 1, pageSize = 10 } = {}) => {
+  list: ({ status, q: search, page = 1, pageSize = 10 } = {}) => {
     const q = new URLSearchParams({ page, pageSize })
     if (status) q.set('status', status)
+    if (search && search.trim()) q.set('q', search.trim())
     return request(`/api/tasks?${q}`)
   },
-  counts: async () => {
+  get: (id) => request(`/api/tasks/${id}`),
+  counts: async ({ q: search } = {}) => {
+    const s = search && search.trim() ? `&q=${encodeURIComponent(search.trim())}` : ''
     const [all, ...per] = await Promise.all([
-      request('/api/tasks?pageSize=1'),
-      ...STATUSES.map((s) => request(`/api/tasks?pageSize=1&status=${s}`)),
+      request(`/api/tasks?pageSize=1${s}`),
+      ...STATUSES.map((st) => request(`/api/tasks?pageSize=1&status=${st}${s}`)),
     ])
     return { total: all.total, Todo: per[0].total, InProgress: per[1].total, Done: per[2].total }
   },
+  stats: (days = 14) => request(`/api/tasks/stats?days=${days}`),
   create: (task) => request('/api/tasks', { method: 'POST', body: JSON.stringify(task) }),
   update: (id, task) => request(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(task) }),
   remove: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
@@ -46,9 +50,52 @@ export const tasksApi = {
       return false
     }
   },
-  stats: () => request('/stats'),
   urls: { api: API, ws: WS },
 }
+
+export const catalogApi = {
+  kinds: () => request('/api/catalog'),
+  list: (kind, { parent, q } = {}) => {
+    const params = new URLSearchParams()
+    if (parent) params.set('parent', parent)
+    if (q && q.trim()) params.set('q', q.trim())
+    const s = params.toString()
+    return request(`/api/catalog/${kind}${s ? '?' + s : ''}`)
+  },
+  get: (kind, code) => request(`/api/catalog/${kind}/${code}`),
+  create: (kind, item) => request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify(item) }),
+  update: (kind, code, item) => request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) }),
+  remove: (kind, code) => request(`/api/catalog/${kind}/${code}`, { method: 'DELETE' }),
+}
+
+export const preferencesApi = {
+  get: async (userId) => {
+    const res = await fetch(`${API}/api/preferences/${encodeURIComponent(userId)}`, { headers: { Accept: 'application/json' } })
+    if (res.status === 404) return null
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+    return res.json()
+  },
+  save: (userId, prefs) => request(`/api/preferences/${encodeURIComponent(userId)}`, { method: 'PUT', body: JSON.stringify(prefs) }),
+  remove: (userId) => request(`/api/preferences/${encodeURIComponent(userId)}`, { method: 'DELETE' }),
+}
+
+export const uploadsApi = {
+  list: (source) => request(`/api/uploads${source ? '?source=' + encodeURIComponent(source) : ''}`),
+  create: async ({ files, source, note }) => {
+    const form = new FormData()
+    for (const f of files) form.append('files', f, f.name)
+    if (source) form.append('source', source)
+    if (note) form.append('note', note)
+    const res = await fetch(`${API}/api/uploads`, { method: 'POST', body: form, headers: { Accept: 'application/json' } })
+    const body = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(body?.detail ? `${body.title} (${body.detail})` : body?.title || `${res.status} ${res.statusText}`)
+    return body
+  },
+  remove: (id) => request(`/api/uploads/${id}`, { method: 'DELETE' }),
+  contentUrl: (id) => `${API}/api/uploads/${id}/content`,
+}
+
+export const formatBytes = (n) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`)
 
 export const timeAgo = (iso) => {
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
