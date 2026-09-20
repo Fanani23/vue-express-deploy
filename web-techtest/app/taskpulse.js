@@ -104,6 +104,15 @@ export const uploadsApi = {
 
 export const userKey = (user) => 'user-' + String(user?.sub ?? user?.id ?? 'anon').replace(/[^A-Za-z0-9._@+-]/g, '-').toLowerCase()
 
+export const dataUrlToFile = (dataUrl, name) => {
+  const [meta, b64] = dataUrl.split(',')
+  const type = (meta.match(/^data:([^;]+)/) || [])[1] || 'application/octet-stream'
+  const bin = atob(b64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new File([bytes], name, { type })
+}
+
 export const formatBytes = (n) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`)
 
 export const timeAgo = (iso) => {

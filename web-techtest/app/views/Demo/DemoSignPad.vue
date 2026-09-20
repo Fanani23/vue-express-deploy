@@ -3,7 +3,7 @@
     <header class="page__head">
       <div>
         <h1 class="page__title">Signature</h1>
-        <p class="page__subtitle">The template's <code>&lt;vcxwc-sign-pad&gt;</code> custom element bound with <code>v-model</code>: draw, and the PNG data URL is available to the app immediately.</p>
+        <p class="page__subtitle">The template's <code>&lt;vcxwc-sign-pad&gt;</code> custom element bound with <code>v-model</code>: draw, and the PNG data URL is available to the app immediately — save it and it becomes an upload in TaskPulse (<code>/api/uploads</code>, source <code>signpad</code>).</p>
       </div>
     </header>
 
@@ -41,12 +41,26 @@
         <template v-else>
           <div class="sig"><img :src="imageDataUrl" alt="signature" /></div>
           <div class="page__actions" style="margin-top: 0.75rem">
-            <a :href="imageDataUrl" download="signature.png"><a-button type="primary"><template #icon><DownloadOutlined /></template>Download PNG</a-button></a>
+            <a-button type="primary" :loading="saving" @click="save" data-cy="sig-save"><template #icon><CloudUploadOutlined /></template>Save to server</a-button>
+            <a :href="imageDataUrl" download="signature.png"><a-button><template #icon><DownloadOutlined /></template>Download PNG</a-button></a>
             <a-button @click="copyUrl"><template #icon><CopyOutlined /></template>Copy data URL</a-button>
             <span class="page__muted"><code>{{ imageDataUrl.slice(0, 22) }}…</code></span>
           </div>
         </template>
-        <p class="page__note">In a real form this data URL is posted with the other fields, or converted to a Blob and uploaded.</p>
+        <p class="page__note">Save converts the data URL to a Blob and posts it as multipart/form-data — the same path a real form would take.</p>
+        <div class="sec" style="margin-top: 1rem">
+          <span class="sec__icon"><CloudServerOutlined /></span>
+          <h3 class="sec__title">Saved signatures</h3>
+          <span class="sec__count">{{ saved.length }}</span>
+        </div>
+        <div v-if="!saved.length" class="empty"><CloudServerOutlined class="empty__icon" /><span>None saved yet</span></div>
+        <ul v-else class="saved" data-cy="saved">
+          <li v-for="u in saved" :key="u.id" class="saved__item">
+            <a :href="uploadsApi.contentUrl(u.id)" target="_blank" rel="noopener" class="saved__img"><img :src="uploadsApi.contentUrl(u.id)" alt="" /></a>
+            <span class="saved__meta"><strong>{{ u.fileName }}</strong><span class="page__muted">{{ formatBytes(u.size) }} · {{ timeAgo(u.createdAt) }}</span></span>
+            <a-popconfirm title="Delete from the server?" ok-text="Delete" ok-type="danger" @confirm="removeSaved(u)"><a-button size="small" type="text" danger><template #icon><DeleteOutlined /></template></a-button></a-popconfirm>
+          </li>
+        </ul>
       </div>
     </div>
   </div>
@@ -56,9 +70,19 @@
 import '@es-labs/jslib/web/sign-pad'
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { message } from 'ant-design-vue'
-import { EditOutlined, HighlightOutlined, ClearOutlined, FileImageOutlined, DownloadOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { EditOutlined, HighlightOutlined, ClearOutlined, FileImageOutlined, DownloadOutlined, CopyOutlined, CloudUploadOutlined, CloudServerOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { uploadsApi, dataUrlToFile, formatBytes, timeAgo } from '../../taskpulse.js'
 
 const imageDataUrl = ref('')
+const saved = ref([])
+const saving = ref(false)
+const loadSaved = async () => { try { saved.value = await uploadsApi.list('signpad') } catch { saved.value = [] } }
+const save = async () => {
+  if (!imageDataUrl.value) return
+  saving.value = true
+  try { await uploadsApi.create({ files: [dataUrlToFile(imageDataUrl.value, `signature-${Date.now()}.png`)], source: 'signpad' }); message.success('Signature saved on the server'); await loadSaved() } catch (e) { message.error(e.message) } finally { saving.value = false }
+}
+const removeSaved = async (u) => { try { await uploadsApi.remove(u.id); await loadSaved() } catch (e) { message.error(e.message) } }
 const color = ref('#1a1d21')
 const lineWidth = ref(2)
 const padKey = ref(0)
@@ -88,7 +112,7 @@ const copyUrl = async () => {
 }
 watch([color, lineWidth], () => { padKey.value++ })
 
-onMounted(() => { fit(); ro = new ResizeObserver(fit); if (frame.value) ro.observe(frame.value) })
+onMounted(() => { fit(); loadSaved(); ro = new ResizeObserver(fit); if (frame.value) ro.observe(frame.value) })
 onBeforeUnmount(() => ro?.disconnect())
 </script>
 
@@ -107,4 +131,9 @@ onBeforeUnmount(() => ro?.disconnect())
 .swatch--on { border-color: var(--p-accent); transform: scale(1.1); }
 .sig { border: 1px solid var(--p-border); border-radius: 12px; background: #fff; padding: 0.5rem; }
 .sig img { max-width: 100%; display: block; }
+.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.5rem; }
+.saved__item { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.6rem; align-items: center; padding: 0.4rem 0.6rem; border-radius: 10px; background: var(--p-bg); border: 1px solid var(--p-border); }
+.saved__img img { width: 6rem; height: 2.8rem; object-fit: contain; background: #fff; border-radius: 6px; display: block; }
+.saved__meta { display: grid; gap: 0.1rem; min-width: 0; font-size: 0.82rem; line-height: 1.3; }
+.saved__meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
