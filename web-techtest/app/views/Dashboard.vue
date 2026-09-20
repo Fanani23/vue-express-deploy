@@ -160,6 +160,7 @@
                 <router-link v-if="KIND_PAGE[k.kind]" :to="KIND_PAGE[k.kind]" class="kind__name">{{ k.kind }}</router-link>
                 <span v-else class="kind__name kind__name--plain">{{ k.kind }}</span>
                 <span class="kind__count">{{ k.count }}</span>
+                <a-button size="small" type="text" class="kind__history" :title="`History of ${k.kind}: who changed what`" :aria-label="`History of ${k.kind}`" :data-cy="'kind-history-' + k.kind" @click="kindHistory = k.kind"><template #icon><HistoryOutlined /></template></a-button>
                 <a :href="catalogApi.exportUrl(k.kind)" download class="kind__csv" :title="`Download ${k.kind} as CSV`" :aria-label="`Download ${k.kind} as CSV`"><DownloadOutlined /></a>
                 <template v-if="admin">
                   <input type="file" accept=".csv,text/csv" class="visually-hidden" tabindex="-1" aria-hidden="true" @change="(e) => pickCsv(e, (f) => importKind(k.kind, f))" />
@@ -197,10 +198,12 @@
       </a-col>
     </a-row>
   </div>
+  <HistoryDrawer :open="!!kindHistory" :title="`History · ${kindHistory}`" show-target :loader="() => auditApi.list({ resource: 'catalog', kind: kindHistory, limit: 100 })" @close="kindHistory = null" />
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
+import HistoryDrawer from '../components/HistoryDrawer.vue'
 import { Modal, Input, message } from 'ant-design-vue'
 import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined, DownloadOutlined, UploadOutlined, ApiOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
@@ -253,6 +256,7 @@ const fail = (e) => { error.value = e?.message || String(e) }
 const loadStats = async () => { try { stats.value = await tasksApi.stats(14) } catch (e) { stats.value = null; fail(e) } }
 const loadMembers = async () => { try { members.value = await usersApi.list() } catch (e) { fail(e) } }
 const authEvents = ref([])
+const kindHistory = ref(null)
 const hooks = ref([])
 const newHook = reactive({ url: '', secret: '', resources: [] })
 const loadHooks = async () => { if (!admin.value) return; try { hooks.value = await webhooksApi.list() } catch { hooks.value = [] } }
@@ -416,6 +420,7 @@ useChangeFeed(() => loadAll())
 .inline-add--hook { grid-template-columns: 1.4fr 1fr auto auto; }
 .inline-add__select { min-width: 9rem; }
 .kind__import { margin-left: 0.1rem; }
+.kind__history { margin-left: 0.2rem; opacity: 0.6; } .kind__history:hover { opacity: 1; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }

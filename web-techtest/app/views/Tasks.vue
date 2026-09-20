@@ -114,6 +114,9 @@
                   <a-tooltip :title="'Move to ' + STATUS_LABEL[NEXT_STATUS[record.status]]">
                     <a-button size="small" type="text" class="task__btn" @click="setStatus(record, NEXT_STATUS[record.status])"><template #icon><ArrowRightOutlined /></template></a-button>
                   </a-tooltip>
+                  <a-tooltip title="History: who changed what">
+                    <a-button size="small" type="text" class="task__btn" :aria-label="`History of ${record.title}`" :data-cy="'history-' + record.id" @click="history = record"><template #icon><HistoryOutlined /></template></a-button>
+                  </a-tooltip>
                   <a-popconfirm title="Delete this task?" ok-text="Delete" ok-type="danger" @confirm="removeTask(record)">
                     <a-button size="small" type="text" danger class="task__btn" :data-cy="'delete-' + record.id"><template #icon><DeleteOutlined /></template></a-button>
                   </a-popconfirm>
@@ -173,11 +176,13 @@
       <a-alert v-if="error" class="dash__alert" type="error" show-icon closable :message="error" @close="error = ''" />
     </transition>
   </div>
+  <HistoryDrawer :open="!!history" :title="history ? `History · ${history.title}` : ''" :loader="() => tasksApi.history(history.id)" @close="history = null" />
 </template>
 
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import HistoryDrawer from '../components/HistoryDrawer.vue'
 import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { tasksApi, catalogApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS, PRIORITIES, PRIORITY_COLOR, isOverdue, dueLabel } from '../taskpulse.js'
 import { usersApi } from '../users.js'
@@ -218,6 +223,7 @@ const loadOptions = async () => {
 }
 const loadOverdue = async () => { try { overdueCount.value = (await tasksApi.list({ due: 'overdue', pageSize: 1 })).total } catch { } }
 const exportHref = computed(() => tasksApi.exportUrl({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, ...extra }))
+const history = ref(null)
 const importing = ref(false)
 const importResult = ref(null)
 const importCsv = async (file) => {

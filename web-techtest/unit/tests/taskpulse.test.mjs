@@ -261,3 +261,15 @@ describe('task fields, CSV, audit and webhooks', () => {
     expect(JSON.parse(fetch.mock.calls[4][1].body)).toEqual({ active: false })
   })
 })
+
+describe('history', () => {
+  it('task, catalog item and kind history hit the audit-backed routes', async () => {
+    fetch.mockResolvedValue(jsonResponse(200, []))
+    await mod.tasksApi.history('t1')
+    await mod.catalogApi.history('places', 'p1')
+    await mod.auditApi.list({ resource: 'catalog', kind: 'places', target: 'p1', limit: 100 })
+    expect(fetch.mock.calls.map(([u]) => u.replace('http://taskpulse.test', ''))).toEqual([
+      '/api/tasks/t1/history', '/api/catalog/places/p1/history', '/api/audit?limit=100&resource=catalog&kind=places&target=p1',
+    ])
+  })
+})
