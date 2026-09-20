@@ -14,12 +14,18 @@ jobs:
       EXPRESS_TEMPLATE_COMMIT: db883cd
       VUE_TEMPLATE_COMMIT: 99a34fa
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: kit
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
+      - name: npm cache (templates at their pinned commits, kit unit + e2e)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ env.EXPRESS_TEMPLATE_COMMIT }}-${{ env.VUE_TEMPLATE_COMMIT }}-${{ hashFiles('kit/web-techtest/unit/package-lock.json', 'kit/e2e/package.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: Shell scripts are valid and LF
         run: |
@@ -58,7 +64,7 @@ jobs:
           npx vite build --config web-techtest/vite.config.js --mode cloud --logLevel error
           test -f web-techtest/dist/index.html
           grep -rq "taskpulse.example" web-techtest/dist/assets/
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: web-techtest-dist
           path: vue-antd-template/apps/web-techtest/dist
@@ -73,12 +79,18 @@ jobs:
       VUE_TEMPLATE_COMMIT: 99a34fa
       JWT: ci-only-jwt-secret-shared-by-express-and-taskpulse-48
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: kit
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
+      - name: npm cache (templates at their pinned commits, kit unit + e2e)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ env.EXPRESS_TEMPLATE_COMMIT }}-${{ env.VUE_TEMPLATE_COMMIT }}-${{ hashFiles('kit/web-techtest/unit/package-lock.json', 'kit/e2e/package.json') }}
+          restore-keys: npm-${{ runner.os }}-
 
       - name: TaskPulse (part B) - docker compose, seeded
         run: |
