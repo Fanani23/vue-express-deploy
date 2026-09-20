@@ -16,7 +16,7 @@ export default defineConfig({
     include: ['tests/**/*.test.mjs'],
     coverage: {
       provider: 'v8',
-      include: ['**/app/session.js', '**/app/taskpulse.js', '**/app/users.js'],
+      include: ['**/app/session.js', '**/app/taskpulse.js', '**/app/users.js', '**/app/shortcuts.js'],
       allowExternal: true,
       reporter: ['text', 'json-summary'],
       thresholds: { lines: 75, functions: 70 },

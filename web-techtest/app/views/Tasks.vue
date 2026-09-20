@@ -183,6 +183,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import HistoryDrawer from '../components/HistoryDrawer.vue'
+import { useCommands } from '../shortcuts.js'
 import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutlined, UnorderedListOutlined, EditOutlined, AlignLeftOutlined, CheckOutlined, BorderOutlined, ClockCircleOutlined, HistoryOutlined, InboxOutlined, ThunderboltOutlined, NotificationOutlined, SendOutlined, SwapOutlined, ReloadOutlined, AppstoreOutlined, CheckCircleOutlined, LeftOutlined, RightOutlined, DoubleLeftOutlined, DoubleRightOutlined, SearchOutlined } from '@ant-design/icons-vue'
 import { tasksApi, catalogApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS, PRIORITIES, PRIORITY_COLOR, isOverdue, dueLabel } from '../taskpulse.js'
 import { usersApi } from '../users.js'
@@ -224,6 +225,14 @@ const loadOptions = async () => {
 const loadOverdue = async () => { try { overdueCount.value = (await tasksApi.list({ due: 'overdue', pageSize: 1 })).total } catch { } }
 const exportHref = computed(() => tasksApi.exportUrl({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, ...extra }))
 const history = ref(null)
+// this page's commands and keys while it is open: n = new task, / = search, e = export the current view
+const focusNew = () => document.querySelector('[data-cy=new-title]')?.focus()
+const focusSearch = () => document.querySelector('[data-cy=search]')?.focus()
+useCommands(() => [
+  { id: 'new-task', title: 'New task', hint: 'focus the title box', keys: ['n'], icon: PlusOutlined, keywords: ['add', 'create'], run: focusNew },
+  { id: 'search-tasks', title: 'Search tasks', keys: ['/'], icon: SearchOutlined, keywords: ['find', 'filter'], run: focusSearch },
+  { id: 'export-csv', title: 'Export this list as CSV', keys: ['e'], icon: DownloadOutlined, keywords: ['download', 'csv'], run: () => { const a = document.createElement('a'); a.href = exportHref.value; a.download = ''; a.click() } },
+])
 const importing = ref(false)
 const importResult = ref(null)
 const importCsv = async (file) => {

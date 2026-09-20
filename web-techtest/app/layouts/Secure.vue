@@ -34,6 +34,9 @@
             <span class="shell__email">{{ identity }}</span>
             <span class="shell__roles">{{ roles }}</span>
           </span>
+          <a-tooltip :title="`Command palette (${keyLabel(['mod+k'])})`">
+            <a-button type="text" size="small" class="shell__logout" aria-label="Command palette" data-cy="palette-open" @click="paletteOpen = true"><template #icon><SearchOutlined /></template></a-button>
+          </a-tooltip>
           <a-tooltip title="Sign out">
             <a-button type="text" size="small" class="shell__logout" aria-label="Sign out" @click="logout"><template #icon><LogoutOutlined /></template></a-button>
           </a-tooltip>
@@ -44,14 +47,18 @@
         <router-view :key="$route.fullPath"></router-view>
       </a-layout-content>
     </a-layout>
+    <CommandPalette :run="runCommand" />
   </a-layout>
 </template>
 
 <script setup>
 import { onMounted, onUnmounted, onBeforeUnmount, ref, reactive, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { MenuUnfoldOutlined, MenuFoldOutlined, LogoutOutlined } from '@ant-design/icons-vue'
+import { MenuUnfoldOutlined, MenuFoldOutlined, LogoutOutlined, SearchOutlined, AppstoreOutlined, CheckSquareOutlined, LineChartOutlined, UserOutlined, BulbOutlined, ExperimentOutlined } from '@ant-design/icons-vue'
+import { useRouter } from 'vue-router'
 import BrandMark from '../components/BrandMark.vue'
+import CommandPalette from '../components/CommandPalette.vue'
+import { paletteOpen, registerCommands, installShortcuts, keyLabel } from '../shortcuts.js'
 import { useMainStore } from '../store.js'
 import { SECURE_ROUTES } from '../setups/routes.js'
 import { onLogin, onLogout } from '../setups/events.js'
@@ -113,10 +120,27 @@ const applyServerPreferences = async () => {
   } catch { }
 }
 
+// Keyboard: Ctrl/⌘ K opens the palette; `g` + a letter jumps to a page, `t` flips the theme, `?` lists everything.
+// Pages add their own commands (the Tasks page: new task, search, export) while they are mounted.
+const router = useRouter()
+const runCommand = (c) => { if (c.to) router.push(c.to); else c.run?.() }
+let stopShortcuts = null
+let unregister = null
+const PAGE_ICON = { '/dashboard': AppstoreOutlined, '/tasks': CheckSquareOutlined, '/analytics': LineChartOutlined, '/profile': UserOutlined }
+const PAGE_KEYS = { '/dashboard': ['g', 'd'], '/tasks': ['g', 't'], '/analytics': ['g', 'a'], '/profile': ['g', 'p'] }
+
 let stopA11y = null
 onMounted(async () => {
   applyServerPreferences()
   stopA11y = watchA11y()
+  unregister = registerCommands([
+    ...SECURE_ROUTES.filter((r) => r.meta?.layout === 'layout-secure' && !r.hidden && r.path.split('/').length <= 3).map((r) => ({
+      id: 'go' + r.path.replace(/\W+/g, '-'), title: (r.path.startsWith('/template-demos') ? 'Demo: ' : 'Go to ') + r.name, to: r.path, keys: PAGE_KEYS[r.path], icon: PAGE_ICON[r.path] || ExperimentOutlined, keywords: ['page', 'open', r.path],
+    })),
+    { id: 'theme', title: 'Toggle dark / light theme', keys: ['t'], icon: BulbOutlined, keywords: ['dark', 'light', 'appearance'], run: () => theme.toggle() },
+    { id: 'logout', title: 'Sign out', icon: LogoutOutlined, keywords: ['logout', 'exit'], run: () => logout() },
+  ])
+  stopShortcuts = installShortcuts(runCommand)
   idleTimer.timeouts.length = 0
   idleTimer.timeouts.push({ time: IDLE_LIMIT_SECONDS, fn: () => store.doLogin({ forced: true, reason: 'idle' }), stop: true })
   idleTimer.reset()
@@ -146,6 +170,8 @@ onMounted(async () => {
 onUnmounted(() => {})
 onBeforeUnmount(() => {
   stopA11y?.()
+  stopShortcuts?.()
+  unregister?.()
   idleTimer.stop()
   onLogout && onLogout()
 })
