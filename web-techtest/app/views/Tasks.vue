@@ -69,7 +69,14 @@
             <a-select v-model:value="extra.due" size="small" placeholder="Any due date" allow-clear :options="[{ value: 'overdue', label: 'Overdue' }, { value: 'today', label: 'Due today' }, { value: 'week', label: 'Due this week' }, { value: 'none', label: 'No due date' }]" data-a11y-label="Filter by due date" class="task-filters__select" />
             <a-select v-model:value="extra.label" size="small" placeholder="Any label" allow-clear show-search :options="labelOptions" data-a11y-label="Filter by label" class="task-filters__select" />
             <span v-if="overdueCount" class="task-filters__overdue" data-cy="overdue-count"><ClockCircleOutlined /> {{ overdueCount }} overdue</span>
+            <span class="task-filters__csv">
+              <a-tooltip title="Download what this list shows (same filters) as CSV"><a-button size="small" :href="exportHref" download data-cy="export-csv"><template #icon><DownloadOutlined /></template>CSV</a-button></a-tooltip>
+              <a-upload accept=".csv,text/csv" :show-upload-list="false" :before-upload="importCsv" :custom-request="() => {}">
+                <a-tooltip title="Import a CSV (title required; id updates an existing task; labels a|b)"><a-button size="small" :loading="importing" data-cy="import-csv"><template #icon><UploadOutlined /></template>Import</a-button></a-tooltip>
+              </a-upload>
+            </span>
           </div>
+          <a-alert v-if="importResult" type="info" show-icon closable class="import-result" data-cy="import-result" :message="`Imported: ${importResult.created} new, ${importResult.updated} updated, ${importResult.skipped.length} skipped`" :description="importResult.skipped.length ? importResult.skipped.slice(0, 5).map((s) => `row ${s.row}: ${s.error}`).join(' · ') : ''" @close="importResult = null" />
 
           <a-table
             :data-source="tasks"
@@ -175,7 +182,8 @@ import { PlusOutlined, DeleteOutlined, ArrowRightOutlined, ApiOutlined, WifiOutl
 import { tasksApi, catalogApi, useTaskPulseSocket, useChangeFeed, timeAgo, STATUSES, STATUS_LABEL, NEXT_STATUS, PRIORITIES, PRIORITY_COLOR, isOverdue, dueLabel } from '../taskpulse.js'
 import { usersApi } from '../users.js'
 import { useMainStore } from '../store.js'
-import { UserOutlined, CalendarOutlined, FlagOutlined, TagsOutlined } from '@ant-design/icons-vue'
+import { UserOutlined, CalendarOutlined, FlagOutlined, TagsOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 
 const api = tasksApi.urls.api
 const apiReady = ref(null)
@@ -209,6 +217,18 @@ const loadOptions = async () => {
   try { tags.value = await catalogApi.list('tags') } catch { tags.value = [] }
 }
 const loadOverdue = async () => { try { overdueCount.value = (await tasksApi.list({ due: 'overdue', pageSize: 1 })).total } catch { } }
+const exportHref = computed(() => tasksApi.exportUrl({ status: filter.value === 'all' ? undefined : filter.value, q: appliedSearch.value, ...extra }))
+const importing = ref(false)
+const importResult = ref(null)
+const importCsv = async (file) => {
+  importing.value = true
+  try {
+    importResult.value = await tasksApi.importCsv(file)
+    message.success(`${importResult.value.created} created, ${importResult.value.updated} updated`)
+    await refresh()
+  } catch (e) { fail(e) } finally { importing.value = false }
+  return false // handled here, nothing for a-upload to upload
+}
 watch(extra, () => { page.value = 1; refresh() })
 const shout = ref('')
 
@@ -341,6 +361,9 @@ useChangeFeed(() => refresh(), { resources: ['task'] })
 .task-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.6rem 0 0.4rem; }
 .task-filters__select { min-width: 9.5rem; }
 .task-filters__overdue { margin-left: auto; font-size: 0.8rem; color: var(--ant-color-error, #cf1322); font-weight: 600; }
+.task-filters__csv { display: inline-flex; gap: 0.3rem; margin-left: auto; }
+.task-filters__overdue + .task-filters__csv { margin-left: 0.5rem; }
+.import-result { margin: 0.4rem 0 0.6rem; }
 .task__meta { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; }
 .task__chip { margin: 0; font-size: 0.72rem; line-height: 1.4; }
 .task__chip--label { background: var(--p-bg, #f5f5f5); }

@@ -160,6 +160,10 @@
                 <router-link v-if="KIND_PAGE[k.kind]" :to="KIND_PAGE[k.kind]" class="kind__name">{{ k.kind }}</router-link>
                 <span v-else class="kind__name kind__name--plain">{{ k.kind }}</span>
                 <span class="kind__count">{{ k.count }}</span>
+                <a :href="catalogApi.exportUrl(k.kind)" download class="kind__csv" :title="`Download ${k.kind} as CSV`" :aria-label="`Download ${k.kind} as CSV`"><DownloadOutlined /></a>
+                <a-upload v-if="admin" accept=".csv,text/csv" :show-upload-list="false" :before-upload="(f) => importKind(k.kind, f)" :custom-request="() => {}" class="kind__import">
+                  <a-button size="small" type="text" :title="`Import ${k.kind} from CSV (code, label, parents a|b, attributes JSON, sort)`" :aria-label="`Import ${k.kind} from CSV`"><template #icon><UploadOutlined /></template></a-button>
+                </a-upload>
               </li>
             </ul>
             <p class="page__note">Every list on the demo pages lives in <code>/api/catalog</code>; click a kind to open the page that edits it.</p>
@@ -173,7 +177,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, h } from 'vue'
 import { Modal, Input, message } from 'ant-design-vue'
-import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined } from '@ant-design/icons-vue'
+import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined, CheckSquareOutlined, RightOutlined, ReloadOutlined, TeamOutlined, EditOutlined, DeleteOutlined, PlusOutlined, HistoryOutlined, CheckOutlined, ClockCircleOutlined, BorderOutlined, HourglassOutlined, InboxOutlined, ArrowRightOutlined, LinkOutlined, DatabaseOutlined, CheckCircleOutlined, PlusCircleOutlined, PercentageOutlined, UnlockOutlined, SafetyOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons-vue'
 import { useMainStore } from '../store.js'
 import { tasksApi, catalogApi, auditApi, timeAgo, STATUS_LABEL, useChangeFeed } from '../taskpulse.js'
 import { usersApi, ROLES, isAdmin } from '../users.js'
@@ -279,6 +283,14 @@ const editMember = (m) => twoFieldModal('Edit account', [{ key: 'username', valu
   try { await usersApi.update(m.id, { username: v.username.trim(), roles: v.roles }); await loadMembers() } catch (e) { fail(e) }
 })
 const removeMember = async (m) => { try { await usersApi.remove(m.id); await loadMembers() } catch (e) { fail(e) } }
+const importKind = async (kind, file) => {
+  try {
+    const r = await catalogApi.importCsv(kind, file)
+    message.success(`${kind}: ${r.created} created, ${r.updated} updated${r.skipped.length ? `, ${r.skipped.length} skipped (row ${r.skipped[0].row}: ${r.skipped[0].error})` : ''}`)
+    await loadKinds()
+  } catch (e) { fail(e) }
+  return false
+}
 const unlockMember = async (m) => { try { await usersApi.update(m.id, { unlock: true }); message.success(`${m.username} unlocked`); await loadMembers() } catch (e) { fail(e) } }
 
 const validUrl = (u) => /^(https?:\/\/|\/)/.test((u || '').trim())
@@ -354,6 +366,8 @@ useChangeFeed(() => loadAll())
 .authlog__when { white-space: nowrap; }
 @media (max-width: 700px) { .authlog__row { grid-template-columns: auto 1fr; } .authlog__what { grid-column: 1 / -1; white-space: normal; } }
 .member__locked { margin: 0.2rem 0 0; font-size: 0.7rem; line-height: 1.4; }
+.kind__csv { margin-left: 0.4rem; opacity: 0.6; } .kind__csv:hover { opacity: 1; }
+.kind__import { margin-left: 0.1rem; }
 .member--me { border-color: var(--p-primary, #1677ff); }
 .member__you { font-weight: 400; color: var(--p-muted, #8c8c8c); }
 .inline-add--users { grid-template-columns: 1.4fr 1fr auto auto; }

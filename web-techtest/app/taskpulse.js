@@ -78,6 +78,19 @@ export const tasksApi = {
   // change one or more fields of a task the caller already holds
   patch: (task, changes) => request(`/api/tasks/${task.id}`, { method: 'PUT', body: JSON.stringify(taskBody(task, changes)) }),
   remove: (id) => request(`/api/tasks/${id}`, { method: 'DELETE' }),
+  // CSV: export honours the same filters as list(); import takes a File (multipart) and reports per-row outcomes
+  exportUrl: ({ status, q: search, priority, assignee, label, due } = {}) => {
+    const p = new URLSearchParams()
+    if (status) p.set('status', status)
+    if (search && search.trim()) p.set('q', search.trim())
+    if (priority) p.set('priority', priority)
+    if (assignee) p.set('assignee', assignee)
+    if (label) p.set('label', label)
+    if (due) p.set('due', due)
+    const s = p.toString()
+    return `${API}/api/tasks/export.csv${s ? '?' + s : ''}`
+  },
+  importCsv: (file) => { const form = new FormData(); form.append('file', file, file.name); return request('/api/tasks/import', { method: 'POST', body: form }) },
   ready: async () => {
     try {
       const res = await fetch(API + '/health/ready')
@@ -103,6 +116,8 @@ export const catalogApi = {
   create: (kind, item) => request(`/api/catalog/${kind}`, { method: 'POST', body: JSON.stringify(item) }),
   update: (kind, code, item) => request(`/api/catalog/${kind}/${code}`, { method: 'PUT', body: JSON.stringify(item) }),
   remove: (kind, code) => request(`/api/catalog/${kind}/${code}`, { method: 'DELETE' }),
+  exportUrl: (kind) => `${API}/api/catalog/${kind}/export.csv`,
+  importCsv: (kind, file) => { const form = new FormData(); form.append('file', file, file.name); return request(`/api/catalog/${kind}/import`, { method: 'POST', body: form }) },
   upsert: async (kind, code, item) => {
     const existing = await catalogApi.find(kind, code)
     return existing
