@@ -53,9 +53,27 @@
             </li>
             <li class="method">
               <span class="method__icon"><SafetyCertificateOutlined /></span>
-              <span class="method__text"><strong>Sign out everywhere</strong><span class="page__muted">revokes the refresh token server-side; open tabs lose their session at the next call</span></span>
-              <a-button size="small" danger @click="logout">revoke</a-button>
+              <span class="method__text"><strong>Sign out everywhere</strong><span class="page__muted">drops every device's refresh token server-side; open tabs lose their session at the next call</span></span>
+              <a-button size="small" danger data-cy="signout-everywhere" @click="logoutEverywhere">revoke all</a-button>
             </li>
+          </ul>
+
+          <div class="sec sec--sub">
+            <span class="sec__icon"><LaptopOutlined /></span>
+            <h3 class="sec__title">Signed-in devices</h3>
+            <span class="sec__count">{{ sessions.length }}</span>
+          </div>
+          <p class="page__muted devices__hint">Each sign-in is its own session: a phone does not sign the laptop out. Refreshing rotates only this device's token.</p>
+          <ul class="devices" data-cy="devices">
+            <li v-for="s in sessions" :key="s.key" class="device" :class="{ 'device--current': s.current }">
+              <span class="device__icon"><MobileOutlined v-if="/Mobile|Android|iPhone|Phone/i.test(s.device)" /><LaptopOutlined v-else /></span>
+              <span class="device__text">
+                <strong>{{ deviceName(s.device) }}<a-tag v-if="s.current" color="processing" class="device__tag">this device</a-tag></strong>
+                <span class="page__muted">{{ s.ip || 'unknown address' }} · signed in {{ timeAgo(s.createdAt) }} · seen {{ timeAgo(s.lastSeen) }}</span>
+              </span>
+              <a-button v-if="!s.current" size="small" danger :data-cy="'signout-' + s.key" @click="signOutDevice(s)">sign out</a-button>
+            </li>
+            <li v-if="!sessions.length" class="page__muted">No sessions listed — the API predates this feature, or you are signed in through Google only.</li>
           </ul>
         </div>
       </a-col>
@@ -131,6 +149,8 @@ import { useMainStore } from '../store.js'
 import { http } from '../../common/plugins/fetch.js'
 import { useTheme } from '../theme.js'
 import { preferencesApi, userKey, timeAgo } from '../taskpulse.js'
+import { sessionsApi } from '../users.js'
+import { LaptopOutlined, MobileOutlined } from '@ant-design/icons-vue'
 import idleTimer from '@es-labs/jslib/web/idle'
 import { IDLE_LIMIT_SECONDS, refreshTokens } from '../session.js'
 
@@ -232,9 +252,20 @@ const renew = async () => {
 }
 const applyNickname = async () => { store.updateUser({ nickname: nickname.value.trim() || undefined }); if (await savePrefs()) message.success(nickname.value.trim() ? 'Display name saved' : 'Display name cleared') }
 const logout = async () => { store.loading = true; await store.doLogin(null); store.loading = false }
+const logoutEverywhere = async () => { store.loading = true; await store.doLogin(null, { everywhere: true }); store.loading = false }
+const sessions = ref([])
+const loadSessions = async () => { try { sessions.value = await sessionsApi.list() } catch { sessions.value = [] } }
+const deviceName = (ua) => {
+  if (!ua || ua === 'unknown') return 'Unknown device'
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : /curl|node/i.test(ua) ? 'Command line' : ua.split(' ')[0]
+  const os = /Windows/.test(ua) ? 'Windows' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : ''
+  return os ? `${browser} on ${os}` : browser
+}
+const signOutDevice = async (s) => { try { await sessionsApi.remove(s.key); message.success('That device is signed out'); await loadSessions() } catch (e) { message.error(e.message) } }
 
 
 onMounted(async () => {
+  loadSessions()
   tick = setInterval(() => { now.value = Date.now() }, 1000)
   nickname.value = user.value.nickname || ''
   try { prefsSaved.value = await preferencesApi.get(prefKey.value); if (prefsSaved.value) { themeChoice.value = prefsSaved.value.theme; nickname.value = prefsSaved.value.nickname || '' } } catch { prefsSaved.value = null }
@@ -307,4 +338,12 @@ onBeforeUnmount(() => clearInterval(tick))
 .claim__meaning { font-size: 0.78rem; color: var(--p-muted); }
 .pill__dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; background: currentColor; display: inline-block; }
 @media (prefers-reduced-motion: reduce) { .hero__band { background: #2563eb; } }
+.sec--sub { margin-top: 1.25rem; }
+.devices__hint { margin: 0 0 0.6rem; font-size: 0.8rem; }
+.devices { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.device { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--p-border); border-radius: 10px; background: var(--p-bg); }
+.device--current { border-color: var(--p-primary, #1677ff); }
+.device__icon { font-size: 1.1rem; opacity: 0.8; }
+.device__text { display: grid; gap: 0.1rem; font-size: 0.85rem; }
+.device__tag { margin-left: 0.4rem; font-size: 0.68rem; line-height: 1.4; }
 </style>

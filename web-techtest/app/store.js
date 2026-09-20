@@ -10,7 +10,7 @@ export const useMainStore = defineStore('main', () => {
   const user = ref(null)
   const loading = ref(false)
 
-  async function doLogin(payload) {
+  async function doLogin(payload, { everywhere = false } = {}) {
     if (payload) {
       if (payload.forced) {
         session.clear(payload.reason || 'expired')
@@ -24,7 +24,8 @@ export const useMainStore = defineStore('main', () => {
     } else {
       const { VITE_LOGOUT_URL } = import.meta.env
       try {
-        if (VITE_LOGOUT_URL) await http.get(VITE_LOGOUT_URL)
+        // plain logout ends this device's session only; "sign out everywhere" ends all of them (patch 0020)
+        if (VITE_LOGOUT_URL) await http.get(VITE_LOGOUT_URL + (everywhere ? '?all=1' : ''))
         session.clear()
         user.value = null
         await router.push(VITE_INITIAL_PUBLIC_PATH)

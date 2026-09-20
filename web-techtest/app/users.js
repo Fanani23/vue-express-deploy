@@ -35,4 +35,12 @@ export const usersApi = {
   remove: (id) => request(`/api/users/${id}`, { method: 'DELETE' }),
 }
 
+// This account's signed-in devices (patch 0020). `current` is the device this tab belongs to.
+export const sessionsApi = {
+  list: () => request('/api/auth/sessions'),
+  remove: (key) => request(`/api/auth/sessions/${key}`, { method: 'DELETE' }),
+  // sign out everywhere: every device's refresh token is dropped server-side
+  signOutEverywhere: () => request('/api/auth/logout?all=1'),
+}
+
 export const isAdmin = (user) => (Array.isArray(user?.roles) ? user.roles : String(user?.roles || '').split(',')).includes('Admin')
